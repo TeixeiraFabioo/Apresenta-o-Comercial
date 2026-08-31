@@ -4,9 +4,11 @@ import { CalculationBreakdown } from '@/types/simulation'
  * Realiza a computação centralizada e unificada dos cálculos judiciais do contrato imobiliário:
  *
  * 1. 1% do valor efetivamente pago = valor pago × 0,01 (ex.: R$ 240.000,00 × 1% = R$ 2.400,00)
- * 2. Custas judiciais = valor do imóvel × 0,03 (ex.: R$ 480.000,00 × 3% = R$ 14.400,00)
- * 3. Multa de 50% sobre o valor efetivamente pago = valor pago × 0,50 (ex.: R$ 240.000,00 × 50% = R$ 120.000,00)
- * 4. Total estimado = soma dos três itens acima (ex.: R$ 136.800,00)
+ * 2. Multa de 50% sobre o valor efetivamente pago = valor pago × 0,50 (ex.: R$ 240.000,00 × 50% = R$ 120.000,00)
+ * 3. Custas judiciais = 3% de (valor efetivamente pago + valor da multa)
+ *    ex.: 3% × (R$ 240.000,00 + R$ 120.000,00) = 3% × R$ 360.000,00 = R$ 10.800,00
+ * 4. Total estimado a receber = 1% do valor pago + Multa de 50% (ex.: R$ 2.400,00 + R$ 120.000,00 = R$ 122.400,00)
+ *    * As custas judiciais NÃO são somadas no total estimado a receber (despesa processual isolada).
  */
 export function calculateLegalCosts(
   propertyValueInput: number | string | undefined | null,
@@ -16,9 +18,12 @@ export function calculateLegalCosts(
   const amountPaid = sanitizeNumber(amountPaidInput)
 
   const onePercentAmountPaid = roundToTwoDecimals(amountPaid * 0.01)
-  const judicialCosts = roundToTwoDecimals(propertyValue * 0.03)
   const fineFiftyPercent = roundToTwoDecimals(amountPaid * 0.5)
-  const estimatedTotal = roundToTwoDecimals(onePercentAmountPaid + judicialCosts + fineFiftyPercent)
+  // Custas judiciais = 3% de (valor efetivamente pago + multa)
+  const judicialCostsBase = amountPaid + fineFiftyPercent
+  const judicialCosts = roundToTwoDecimals(judicialCostsBase * 0.03)
+  // Total estimado a receber: 1% pago + 50% multa (custas judiciais são despesa isolada e não entram no total)
+  const estimatedTotal = roundToTwoDecimals(onePercentAmountPaid + fineFiftyPercent)
 
   const paidPercentage = propertyValue > 0 ? (amountPaid / propertyValue) * 100 : 0
   const potentialRecoveryTotal = roundToTwoDecimals(amountPaid + fineFiftyPercent)

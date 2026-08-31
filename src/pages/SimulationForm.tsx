@@ -302,8 +302,8 @@ export default function SimulationForm() {
                   >
                     Valor do imóvel comprado (R$) *
                   </Label>
-                  <span className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
-                    Base para as Custas Judiciais (3%)
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                    Valor total de aquisição
                   </span>
                 </div>
                 <div className="relative">
@@ -338,7 +338,7 @@ export default function SimulationForm() {
                     Valor efetivamente pago pelo cliente (R$) *
                   </Label>
                   <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
-                    Base para 1% e Multa de 50%
+                    Base para 1%, Multa de 50% e Custas
                   </span>
                 </div>
                 <div className="relative">
@@ -625,35 +625,12 @@ export default function SimulationForm() {
                 </div>
               </div>
 
-              {/* Item 2: Custas judiciais = valor do imóvel x 3% */}
+              {/* Item 2: Multa de 50% sobre o valor efetivamente pago */}
               <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1 transition-all hover:border-amber-400/50">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                     <span className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 flex items-center justify-center text-[10px] font-bold">
                       2
-                    </span>
-                    Custas judiciais (3% do imóvel)
-                  </span>
-                  <span className="text-[11px] font-mono text-muted-foreground">
-                    {formatCurrencyBRL(calcResults.propertyValue)} × 3%
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between pt-1">
-                  <span className="text-[11px] text-muted-foreground">
-                    Taxas e custas estaduais estimadas
-                  </span>
-                  <span className="text-base font-bold font-mono text-slate-900 dark:text-white">
-                    {formatCurrencyBRL(calcResults.judicialCosts)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Item 3: Multa de 50% sobre o valor efetivamente pago */}
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1 transition-all hover:border-amber-400/50">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 flex items-center justify-center text-[10px] font-bold">
-                      3
                     </span>
                     Multa de 50% sobre o valor pago
                   </span>
@@ -671,34 +648,61 @@ export default function SimulationForm() {
                 </div>
               </div>
 
+              {/* Item 3: Custas judiciais = 3% de (valor pago + multa) [Despesa Isolada] */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1 transition-all hover:border-amber-400/50">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 flex items-center justify-center text-[10px] font-bold">
+                      3
+                    </span>
+                    Custas judiciais (3% de pago + multa)
+                  </span>
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    3% × {formatCurrencyBRL(calcResults.amountPaid + calcResults.fineFiftyPercent)}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between pt-1">
+                  <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <span>Taxas processuais</span>
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                      (despesa isolada)
+                    </span>
+                  </span>
+                  <span className="text-base font-bold font-mono text-slate-900 dark:text-white">
+                    {formatCurrencyBRL(calcResults.judicialCosts)}
+                  </span>
+                </div>
+              </div>
+
               <Separator className="my-2 bg-slate-200 dark:bg-slate-700" />
 
-              {/* TOTAL ESTIMADO (Soma dos 3 itens) */}
+              {/* TOTAL ESTIMADO A RECEBER (1% pago + 50% multa - Sem incluir custas) */}
               <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/15 via-amber-500/10 to-transparent border-2 border-amber-500/40 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
                     <Receipt className="w-4 h-4 text-amber-600" />
-                    Total Estimado da Planilha
+                    Total Estimado a Receber
                   </span>
                   <Badge
                     variant="outline"
                     className="bg-white/80 dark:bg-slate-900 text-[10px] font-mono border-amber-300"
                   >
-                    Soma dos 3 Itens
+                    1% Pago + 50% Multa
                   </Badge>
                 </div>
                 <div className="flex items-baseline justify-between pt-2">
                   <span className="text-xs text-slate-600 dark:text-slate-400">
-                    Totalização das 3 rubricas:
+                    Total estimado a receber:
                   </span>
                   <span className="text-2xl font-black font-mono tracking-tight text-slate-950 dark:text-amber-200">
                     {formatCurrencyBRL(calcResults.estimatedTotal)}
                   </span>
                 </div>
                 <p className="text-[10px] text-amber-800/80 dark:text-amber-400/80 pt-1">
-                  = 1% pago ({formatCurrencyBRL(calcResults.onePercentAmountPaid)}) + 3% custas (
-                  {formatCurrencyBRL(calcResults.judicialCosts)}) + 50% multa (
-                  {formatCurrencyBRL(calcResults.fineFiftyPercent)})
+                  = 1% pago ({formatCurrencyBRL(calcResults.onePercentAmountPaid)}) + 50% multa (
+                  {formatCurrencyBRL(calcResults.fineFiftyPercent)}) • Custas judiciais (
+                  {formatCurrencyBRL(calcResults.judicialCosts)}) constituem despesa processual
+                  isolada.
                 </p>
               </div>
 

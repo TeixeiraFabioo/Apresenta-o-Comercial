@@ -407,35 +407,10 @@ export default function ClientPresentation() {
                     </TableCell>
                   </TableRow>
 
-                  {/* Rubrica 2: Custas judiciais = valor do imóvel x 3% */}
+                  {/* Rubrica 2: Multa de 50% sobre o valor efetivamente pago */}
                   <TableRow className="hover:bg-amber-50/30">
                     <TableCell className="text-center font-mono font-bold text-amber-700 dark:text-amber-400">
                       02
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-bold text-slate-900 dark:text-white print:text-slate-900">
-                        Custas judiciais
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        Estimativa de custas iniciais calculada à razão de 3,00% sobre o valor do
-                        imóvel
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrencyBRL(calc.propertyValue)}
-                    </TableCell>
-                    <TableCell className="text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
-                      3,00%
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-bold text-slate-900 dark:text-white print:text-slate-900 pr-6 text-sm">
-                      {formatCurrencyBRL(calc.judicialCosts)}
-                    </TableCell>
-                  </TableRow>
-
-                  {/* Rubrica 3: Multa de 50% sobre o valor efetivamente pago */}
-                  <TableRow className="hover:bg-amber-50/30">
-                    <TableCell className="text-center font-mono font-bold text-amber-700 dark:text-amber-400">
-                      03
                     </TableCell>
                     <TableCell>
                       <div className="font-bold text-slate-900 dark:text-white print:text-slate-900">
@@ -456,7 +431,7 @@ export default function ClientPresentation() {
                     </TableCell>
                   </TableRow>
 
-                  {/* LINHA DE TOTALIZAÇÃO ESTIMADA */}
+                  {/* LINHA DE TOTALIZAÇÃO ESTIMADA A RECEBER (1% pago + 50% multa) */}
                   <TableRow className="bg-amber-100/70 dark:bg-amber-950/40 border-t-2 border-amber-500/50 print:bg-slate-200 print:border-slate-900">
                     <TableCell className="text-center font-mono font-black text-amber-900 dark:text-amber-200">
                       Σ
@@ -465,10 +440,36 @@ export default function ClientPresentation() {
                       colSpan={3}
                       className="font-bold text-slate-950 dark:text-white print:text-slate-900 text-sm"
                     >
-                      TOTAL ESTIMADO (1% PAGO + 3% CUSTAS + 50% MULTA)
+                      TOTAL ESTIMADO A RECEBER (1% PAGO + 50% MULTA)
                     </TableCell>
                     <TableCell className="text-right font-mono font-black text-slate-950 dark:text-amber-200 print:text-slate-900 text-base pr-6">
                       {formatCurrencyBRL(calc.estimatedTotal)}
+                    </TableCell>
+                  </TableRow>
+
+                  {/* Rubrica 3: Custas judiciais = 3% de (valor efetivamente pago + valor da multa) - Despesa Isolada */}
+                  <TableRow className="bg-slate-50/80 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-700">
+                    <TableCell className="text-center font-mono font-semibold text-slate-500">
+                      *
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <span>Custas judiciais estimadas (Despesa Processual Isolada)</span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Estimativa de 3,00% sobre a soma do valor efetivamente pago e a multa (
+                        {formatCurrencyBRL(calc.amountPaid + calc.fineFiftyPercent)}). Não compõe o
+                        montante a receber.
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-slate-600 dark:text-slate-400">
+                      {formatCurrencyBRL(calc.amountPaid + calc.fineFiftyPercent)}
+                    </TableCell>
+                    <TableCell className="text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
+                      3,00%
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-200 print:text-slate-900 pr-6 text-sm">
+                      {formatCurrencyBRL(calc.judicialCosts)}
                     </TableCell>
                   </TableRow>
                 </TableBody>

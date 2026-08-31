@@ -77,8 +77,12 @@ export default function Layout() {
             to="/"
             className="flex items-center gap-3 group focus:outline-none focus:ring-2 focus:ring-amber-500/40 rounded-lg p-1"
           >
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
-              <Scale className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-black border border-amber-500/30 shadow-md shadow-amber-500/10 group-hover:scale-105 transition-transform shrink-0">
+              <img
+                src="https://cortex-dev-skip-artifacts.s3.amazonaws.com/skip-developer/6673f443-41e7-4029-9e45-f0bf82be34aa.png"
+                alt="Teixeira & Ferreira Advogados Logo"
+                className="w-full h-full object-contain"
+              />
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">

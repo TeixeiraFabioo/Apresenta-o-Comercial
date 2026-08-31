@@ -167,8 +167,11 @@ export default function Index() {
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
               Elabore planilhas rápidas para demonstração ao cliente, calculando automaticamente
               <span className="text-amber-300 font-semibold"> 1% do valor pago</span>,
-              <span className="text-amber-300 font-semibold"> 3% de custas judiciais</span> e a
-              <span className="text-amber-300 font-semibold"> multa de 50%</span> prevista
+              <span className="text-amber-300 font-semibold">
+                {' '}
+                3% de custas judiciais (sobre valor pago + multa)
+              </span>{' '}
+              e a<span className="text-amber-300 font-semibold"> multa de 50%</span> prevista
               contratualmente.
             </p>
           </div>
@@ -221,7 +224,7 @@ export default function Index() {
               {formatCurrencyBRL(metrics.totalPropertiesValue)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Base patrimonial calculada (3% custas)
+              Volume total dos contratos cadastrados
             </p>
           </CardContent>
         </Card>
@@ -246,7 +249,7 @@ export default function Index() {
         <Card className="border-amber-500/30 bg-amber-50/30 dark:bg-amber-950/20 shadow-sm hover:shadow transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider">
-              Total Estimado (Operações)
+              Total Estimado a Receber
             </CardTitle>
             <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold">
               <TrendingUp className="w-4 h-4" />
@@ -257,7 +260,7 @@ export default function Index() {
               {formatCurrencyBRL(metrics.totalEstimated)}
             </div>
             <p className="text-xs text-amber-800/80 dark:text-amber-400 mt-1 font-medium">
-              Soma: 1% pago + 3% custas + 50% multa
+              Soma: 1% pago + 50% multa (sem custas)
             </p>
           </CardContent>
         </Card>
@@ -346,8 +349,11 @@ export default function Index() {
                       Valor do Imóvel
                     </TableHead>
                     <TableHead className="text-right text-xs font-semibold">Valor Pago</TableHead>
-                    <TableHead className="text-right text-xs font-semibold text-amber-700 dark:text-amber-400 font-mono">
-                      Custas (3%)
+                    <TableHead
+                      className="text-right text-xs font-semibold text-slate-700 dark:text-slate-300 font-mono"
+                      title="3% de (valor pago + multa) — Despesa isolada"
+                    >
+                      Custas (3%)*
                     </TableHead>
                     <TableHead className="text-right text-xs font-semibold text-amber-700 dark:text-amber-400 font-mono">
                       Multa (50%)

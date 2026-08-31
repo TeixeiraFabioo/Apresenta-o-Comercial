@@ -50,11 +50,11 @@ export interface CalculationBreakdown {
   paidPercentage: number
   /** 1% do valor efetivamente pago = valor pago × 0,01 */
   onePercentAmountPaid: number
-  /** Custas judiciais = valor do imóvel × 0,03 (3%) */
+  /** Custas judiciais = 3% de (valor efetivamente pago + valor da multa) */
   judicialCosts: number
   /** Multa de 50% sobre o valor efetivamente pago = valor pago × 0,50 */
   fineFiftyPercent: number
-  /** Total estimado da operação = soma dos 3 itens acima */
+  /** Total estimado a receber = 1% do valor pago + Multa de 50% (sem incluir custas judiciais) */
   estimatedTotal: number
   /** Potencial de recuperação financeira estimada (Restituição integral + Multa) */
   potentialRecoveryTotal: number
