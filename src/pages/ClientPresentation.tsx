@@ -125,7 +125,7 @@ export default function ClientPresentation() {
     )
   }
 
-  const lawyerName = user?.name || 'Advogado Responsável'
+  const lawyerName = user?.name || 'Dr. Fábio Teixeira'
   const currentDateFormatted = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'long',
   }).format(new Date())

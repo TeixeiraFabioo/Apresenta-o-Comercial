@@ -30,7 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser({
         id: model.id,
         email: model.email || '',
-        name: model.name || model.email?.split('@')[0] || 'Usuário',
+        name: model.name || 'Dr. Fábio Teixeira',
         avatar: model.avatar ? pb.files.getURL(model, model.avatar) : undefined,
       })
     } else {

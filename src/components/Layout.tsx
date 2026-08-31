@@ -47,14 +47,21 @@ export default function Layout() {
 
   const getInitials = (name?: string, email?: string) => {
     if (name) {
-      const parts = name.trim().split(/\s+/)
-      if (parts.length >= 2) {
+      // Remove títulos honoríficos como Dr., Dra., Prof., etc. para capturar as iniciais do nome real (ex: "Dr. Fábio Teixeira" -> "FT")
+      const cleaned = name
+        .replace(/^(dr\.|dra\.|doutor\b|doutora\b|adv\.|advogado\b|advogada\b)\s*/i, '')
+        .trim()
+      const parts = cleaned.split(/\s+/)
+      if (parts.length >= 2 && parts[0] && parts[parts.length - 1]) {
         return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      }
+      if (cleaned.length >= 2) {
+        return cleaned.slice(0, 2).toUpperCase()
       }
       return name.slice(0, 2).toUpperCase()
     }
     if (email) {
-      return email.slice(0, 2).toUpperCase()
+      return 'FT'
     }
     return 'FT'
   }
@@ -131,7 +138,7 @@ export default function Layout() {
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                       <p className="text-xs font-semibold text-slate-900 dark:text-white leading-none">
-                        {user?.name || 'Advogado Responsável'}
+                        {user?.name || 'Dr. Fábio Teixeira'}
                       </p>
                       <p className="text-[11px] leading-none text-muted-foreground truncate">
                         {user?.email}
