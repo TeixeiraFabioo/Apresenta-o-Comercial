@@ -1,40 +1,76 @@
-import { CalculationBreakdown } from '@/types/simulation'
+import { CalculationBreakdown, SimulationType } from '@/types/simulation'
 
 /**
  * Realiza a computação centralizada e unificada dos cálculos judiciais do contrato imobiliário:
  *
- * 1. 1% do valor efetivamente pago = valor pago × 0,01 (ex.: R$ 240.000,00 × 1% = R$ 2.400,00)
- * 2. Multa de 50% sobre o valor efetivamente pago = valor pago × 0,50 (ex.: R$ 240.000,00 × 50% = R$ 120.000,00)
- * 3. Custas judiciais = 3% de (valor efetivamente pago + valor da multa)
- *    ex.: 3% × (R$ 240.000,00 + R$ 120.000,00) = 3% × R$ 360.000,00 = R$ 10.800,00
- * 4. Total estimado a receber = 1% do valor pago + Multa de 50% (ex.: R$ 2.400,00 + R$ 120.000,00 = R$ 122.400,00)
- *    * As custas judiciais NÃO são somadas no total estimado a receber (despesa processual isolada).
+ * Regra de negócio: "Se aplicável 1% pelo atraso, a multa de 50% não é devida."
+ *
+ * - "indenizacao_atraso" (Indenização por Atraso):
+ *    • Aplica o cálculo de 1% do valor efetivamente pago e NÃO aplica a multa de 50% (0).
+ *    • Total a receber pelo cliente = apenas o 1% do valor efetivamente pago.
+ *    • Custas judiciais = 3% sobre o valor efetivamente pago (já que a multa não é devida).
+ *    • Potencial de recuperação = valor efetivamente pago + 1% por atraso.
+ *
+ * - "rescisao_contratual" (Rescisão Contratual):
+ *    • Aplica a multa de 50% sobre o valor efetivamente pago e NÃO aplica o 1% por atraso (0).
+ *    • Total a receber pelo cliente = apenas a multa de 50% sobre o valor efetivamente pago.
+ *    • Custas judiciais = 3% sobre (valor efetivamente pago + multa de 50%).
+ *    • Potencial de recuperação = restituição integral (100% pago) + multa de 50%.
+ *
+ * * Em ambos os casos, as custas judiciais continuam sendo uma despesa isolada que NÃO entra
+ *   no "TOTAL ESTIMADO A RECEBER PELO CLIENTE".
  */
 export function calculateLegalCosts(
   propertyValueInput: number | string | undefined | null,
   amountPaidInput: number | string | undefined | null,
+  simulationType: SimulationType = 'rescisao_contratual',
 ): CalculationBreakdown {
   const propertyValue = sanitizeNumber(propertyValueInput)
   const amountPaid = sanitizeNumber(amountPaidInput)
+  const type: SimulationType =
+    simulationType === 'indenizacao_atraso' ? 'indenizacao_atraso' : 'rescisao_contratual'
 
-  const onePercentAmountPaid = roundToTwoDecimals(amountPaid * 0.01)
-  const fineFiftyPercent = roundToTwoDecimals(amountPaid * 0.5)
-  // Custas judiciais = 3% de (valor efetivamente pago + multa)
-  const judicialCostsBase = amountPaid + fineFiftyPercent
+  const rawOnePercent = roundToTwoDecimals(amountPaid * 0.01)
+  const rawFiftyPercent = roundToTwoDecimals(amountPaid * 0.5)
+
+  let onePercentAmountPaid = 0
+  let fineFiftyPercent = 0
+  let judicialCostsBase = 0
+  let estimatedTotal = 0
+  let potentialRecoveryTotal = 0
+
+  if (type === 'indenizacao_atraso') {
+    // Indenização por Atraso: 1% aplicável, multa 50% NÃO devida
+    onePercentAmountPaid = rawOnePercent
+    fineFiftyPercent = 0
+    // Custas incidem apenas sobre o valor efetivamente pago
+    judicialCostsBase = amountPaid
+    // Total a receber: apenas o 1% do valor efetivamente pago
+    estimatedTotal = onePercentAmountPaid
+    potentialRecoveryTotal = roundToTwoDecimals(amountPaid + onePercentAmountPaid)
+  } else {
+    // Rescisão Contratual: multa 50% aplicável, 1% por atraso NÃO aplicável
+    onePercentAmountPaid = 0
+    fineFiftyPercent = rawFiftyPercent
+    // Custas incidem sobre (valor pago + multa de 50%)
+    judicialCostsBase = roundToTwoDecimals(amountPaid + fineFiftyPercent)
+    // Total a receber: apenas a multa de 50% sobre o valor efetivamente pago
+    estimatedTotal = fineFiftyPercent
+    potentialRecoveryTotal = roundToTwoDecimals(amountPaid + fineFiftyPercent)
+  }
+
   const judicialCosts = roundToTwoDecimals(judicialCostsBase * 0.03)
-  // Total estimado a receber: 1% pago + 50% multa (custas judiciais são despesa isolada e não entram no total)
-  const estimatedTotal = roundToTwoDecimals(onePercentAmountPaid + fineFiftyPercent)
-
   const paidPercentage = propertyValue > 0 ? (amountPaid / propertyValue) * 100 : 0
-  const potentialRecoveryTotal = roundToTwoDecimals(amountPaid + fineFiftyPercent)
 
   return {
+    simulationType: type,
     propertyValue,
     amountPaid,
     paidPercentage,
     onePercentAmountPaid,
-    judicialCosts,
     fineFiftyPercent,
+    judicialCostsBase,
+    judicialCosts,
     estimatedTotal,
     potentialRecoveryTotal,
   }
@@ -180,6 +216,46 @@ export function getDeliveryDelayStatus(expectedDateStr: string | undefined | nul
 /**
  * Labels e badges de status
  */
+/**
+ * Configurações e labels para os tipos de simulação
+ */
+export const SIMULATION_TYPE_CONFIG: Record<
+  SimulationType,
+  {
+    label: string
+    shortLabel: string
+    badgeLabel: string
+    description: string
+    clientTotalExplanation: string
+    ruleExplanation: string
+    colorClasses: string
+  }
+> = {
+  rescisao_contratual: {
+    label: 'Rescisão Contratual',
+    shortLabel: 'Rescisão Contratual',
+    badgeLabel: 'Rescisão Contratual',
+    description:
+      'Aplica multa de 50% sobre o valor efetivamente pago (não se aplica o 1% por atraso).',
+    clientTotalExplanation: 'Multa de 50% sobre o valor pago',
+    ruleExplanation:
+      'Na Rescisão Contratual, aplica-se a multa compensatória de 50% sobre o valor quitado. O 1% por atraso não é aplicável.',
+    colorClasses:
+      'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700',
+  },
+  indenizacao_atraso: {
+    label: 'Indenização por Atraso',
+    shortLabel: 'Indenização por Atraso',
+    badgeLabel: 'Indenização por Atraso',
+    description: 'Aplica 1% ao mês sobre o valor efetivamente pago (multa de 50% não é devida).',
+    clientTotalExplanation: '1% do valor efetivamente pago',
+    ruleExplanation:
+      'Na Indenização por Atraso, aplica-se a verba indenizatória de 1% do valor quitado. A multa rescisória de 50% não é devida.',
+    colorClasses:
+      'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-700',
+  },
+}
+
 export const STATUS_LABELS: Record<
   string,
   {

@@ -9,6 +9,7 @@ import {
   formatPercentBRL,
   getDeliveryDelayStatus,
   STATUS_LABELS,
+  SIMULATION_TYPE_CONFIG,
 } from '@/lib/calculations'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -76,7 +77,11 @@ export default function ClientPresentation() {
 
   const calc = useMemo(() => {
     if (!simulation) return null
-    return calculateLegalCosts(simulation.property_value, simulation.amount_paid)
+    return calculateLegalCosts(
+      simulation.property_value,
+      simulation.amount_paid,
+      simulation.simulation_type,
+    )
   }, [simulation])
 
   const delay = useMemo(() => {
@@ -130,11 +135,16 @@ export default function ClientPresentation() {
     dateStyle: 'long',
   }).format(new Date())
 
+  const isDelayOption = simulation.simulation_type === 'indenizacao_atraso'
+  const typeConfig =
+    SIMULATION_TYPE_CONFIG[simulation.simulation_type || 'rescisao_contratual'] ||
+    SIMULATION_TYPE_CONFIG.rescisao_contratual
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto animate-fade-in pb-16 print:p-0 print:m-0 print:max-w-none">
       {/* Barra de Ações (Oculta na Impressão) */}
       <div className="print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           <Button
             variant="ghost"
             size="sm"
@@ -150,6 +160,12 @@ export default function ClientPresentation() {
             className={`text-[10px] font-semibold ${STATUS_LABELS[simulation.status]?.colorClasses}`}
           >
             {STATUS_LABELS[simulation.status]?.label || 'Em Negociação'}
+          </Badge>
+          <Badge
+            variant="outline"
+            className={`text-[10px] font-semibold ${typeConfig.colorClasses}`}
+          >
+            {typeConfig.label}
           </Badge>
         </div>
 
@@ -235,11 +251,19 @@ export default function ClientPresentation() {
           {/* Título do Documento */}
           <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-1">
-              <h1 className="text-lg sm:text-xl font-black tracking-tight text-white print:text-slate-900 leading-snug">
-                DEMONSTRATIVO DE CRÉDITOS E RESTITUIÇÃO AO CLIENTE
-              </h1>
-              <p className="text-xs text-amber-300/90 print:text-slate-600 font-medium">
-                Apresentação Prévia para Fechamento de Contrato de Honorários &amp; Ação Judicial
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-black tracking-tight text-white print:text-slate-900 leading-snug">
+                  DEMONSTRATIVO DE CRÉDITOS E RESTITUIÇÃO AO CLIENTE
+                </h1>
+              </div>
+              <p className="text-xs text-amber-300/90 print:text-slate-600 font-medium flex items-center gap-2">
+                <span>
+                  Apresentação Prévia para Fechamento de Contrato de Honorários &amp; Ação Judicial
+                </span>
+                <span className="text-slate-400 print:hidden">•</span>
+                <span className="font-semibold text-white bg-amber-500/30 px-2 py-0.5 rounded print:text-slate-900 print:bg-transparent print:p-0">
+                  {typeConfig.label}
+                </span>
               </p>
             </div>
             <div className="text-left sm:text-right text-[11px] text-slate-400 print:text-slate-500 font-mono">
@@ -299,7 +323,16 @@ export default function ClientPresentation() {
           </div>
 
           {/* Quadro de Prazos e Status do Contrato */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <span className="text-[11px] text-muted-foreground block font-medium">
+                Modalidade de Pleito
+              </span>
+              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                {typeConfig.label}
+              </span>
+            </div>
+
             <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
               <span className="text-[11px] text-muted-foreground block font-medium">
                 Data Prevista de Entrega
@@ -325,7 +358,7 @@ export default function ClientPresentation() {
                 Percentual Quitado
               </span>
               <span className="text-sm font-bold text-slate-900 dark:text-white font-mono">
-                {formatPercentBRL(calc.paidPercentage)} do valor total
+                {formatPercentBRL(calc.paidPercentage)} do imóvel
               </span>
             </div>
           </div>
@@ -411,73 +444,78 @@ export default function ClientPresentation() {
                     </TableCell>
                   </TableRow>
 
-                  {/* Rubrica 1: 1% do valor efetivamente pago */}
-                  <TableRow className="hover:bg-amber-50/30">
-                    <TableCell className="text-center font-mono font-bold text-amber-700 dark:text-amber-400">
-                      01
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-bold text-slate-900 dark:text-white print:text-slate-900">
-                        1% do valor efetivamente pago
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        Cálculo proporcional de 1,00% sobre o total pago (
-                        {formatCurrencyBRL(calc.amountPaid)})
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrencyBRL(calc.amountPaid)}
-                    </TableCell>
-                    <TableCell className="text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
-                      1,00%
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-bold text-slate-900 dark:text-white print:text-slate-900 pr-6 text-sm">
-                      {formatCurrencyBRL(calc.onePercentAmountPaid)}
-                    </TableCell>
-                  </TableRow>
+                  {/* Exibição apenas da rubrica aplicável conforme a opção escolhida */}
+                  {isDelayOption ? (
+                    /* Rubrica Única Aplicável: 1% do valor efetivamente pago por atraso */
+                    <TableRow className="hover:bg-blue-50/30">
+                      <TableCell className="text-center font-mono font-bold text-blue-700 dark:text-blue-400">
+                        01
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-bold text-slate-900 dark:text-white print:text-slate-900">
+                          1% do valor efetivamente pago (Indenização por Atraso)
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Cálculo indenizatório de 1,00% sobre o total quitado (
+                          {formatCurrencyBRL(calc.amountPaid)}). Multa de 50% não devida.
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatCurrencyBRL(calc.amountPaid)}
+                      </TableCell>
+                      <TableCell className="text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
+                        1,00%
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-blue-700 dark:text-blue-400 print:text-slate-900 pr-6 text-sm">
+                        {formatCurrencyBRL(calc.onePercentAmountPaid)}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    /* Rubrica Única Aplicável: Indenização/Multa de 50% por Rescisão */
+                    <TableRow className="hover:bg-amber-50/30">
+                      <TableCell className="text-center font-mono font-bold text-amber-700 dark:text-amber-400">
+                        01
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-bold text-slate-900 dark:text-white print:text-slate-900">
+                          Indenização / Multa de 50% sobre o valor pago (Rescisão Contratual)
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Penalidade indenizatória de 50,00% contra a construtora em favor do
+                          comprador (1% por atraso não aplicável)
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-emerald-700 dark:text-emerald-400">
+                        {formatCurrencyBRL(calc.amountPaid)}
+                      </TableCell>
+                      <TableCell className="text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
+                        50,00%
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-emerald-700 dark:text-emerald-400 print:text-slate-900 pr-6 text-sm">
+                        {formatCurrencyBRL(calc.fineFiftyPercent)}
+                      </TableCell>
+                    </TableRow>
+                  )}
 
-                  {/* Rubrica 2: Indenização de 50% em favor do cliente */}
-                  <TableRow className="hover:bg-amber-50/30">
-                    <TableCell className="text-center font-mono font-bold text-amber-700 dark:text-amber-400">
-                      02
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-bold text-slate-900 dark:text-white print:text-slate-900">
-                        Indenização de 50% sobre o valor pago (devida pela construtora ao cliente)
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        Crédito indenizatório contratual aplicado contra a construtora em favor do
-                        comprador
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-emerald-700 dark:text-emerald-400">
-                      {formatCurrencyBRL(calc.amountPaid)}
-                    </TableCell>
-                    <TableCell className="text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
-                      50,00%
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-bold text-emerald-700 dark:text-emerald-400 print:text-slate-900 pr-6 text-sm">
-                      {formatCurrencyBRL(calc.fineFiftyPercent)}
-                    </TableCell>
-                  </TableRow>
-
-                  {/* LINHA DE TOTALIZAÇÃO ESTIMADA A RECEBER (1% pago + 50% indenização) */}
+                  {/* LINHA DE TOTALIZAÇÃO ESTIMADA A RECEBER */}
                   <TableRow className="bg-amber-100/70 dark:bg-amber-950/40 border-t-2 border-amber-500/50 print:bg-slate-200 print:border-slate-900">
                     <TableCell className="text-center font-mono font-black text-amber-900 dark:text-amber-200">
                       Σ
                     </TableCell>
                     <TableCell
                       colSpan={3}
-                      className="font-bold text-slate-950 dark:text-white print:text-slate-900 text-sm"
+                      className="font-bold text-slate-950 dark:text-white print:text-slate-900 text-sm uppercase"
                     >
-                      TOTAL ESTIMADO A RECEBER PELO CLIENTE (1% PAGO + 50% INDENIZAÇÃO)
+                      {isDelayOption
+                        ? 'TOTAL ESTIMADO A RECEBER PELO CLIENTE (1% DO VALOR PAGO)'
+                        : 'TOTAL ESTIMADO A RECEBER PELO CLIENTE (MULTA DE 50% SOBRE VALOR PAGO)'}
                     </TableCell>
                     <TableCell className="text-right font-mono font-black text-slate-950 dark:text-amber-200 print:text-slate-900 text-base pr-6">
                       {formatCurrencyBRL(calc.estimatedTotal)}
                     </TableCell>
                   </TableRow>
 
-                  {/* Rubrica 3: Custas judiciais = 3% de (valor efetivamente pago + indenização) - Despesa Isolada */}
+                  {/* Custas judiciais = 3% sobre a base aplicável - Despesa Isolada */}
                   <TableRow className="bg-slate-50/80 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-700">
                     <TableCell className="text-center font-mono font-semibold text-slate-500">
                       *
@@ -487,13 +525,13 @@ export default function ClientPresentation() {
                         <span>Custas judiciais estimadas (Despesa Processual Isolada)</span>
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        Estimativa de 3,00% sobre a soma do valor efetivamente pago e a indenização
-                        devida ({formatCurrencyBRL(calc.amountPaid + calc.fineFiftyPercent)}). Não
-                        compõe o montante a receber.
+                        {isDelayOption
+                          ? `Estimativa de 3,00% sobre o valor efetivamente pago (${formatCurrencyBRL(calc.amountPaid)}), haja vista que a multa de 50% não é devida. Não compõe o montante a receber.`
+                          : `Estimativa de 3,00% sobre a soma do valor efetivamente pago e a multa de 50% (${formatCurrencyBRL(calc.judicialCostsBase)}). Não compõe o montante a receber.`}
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono text-slate-600 dark:text-slate-400">
-                      {formatCurrencyBRL(calc.amountPaid + calc.fineFiftyPercent)}
+                      {formatCurrencyBRL(calc.judicialCostsBase)}
                     </TableCell>
                     <TableCell className="text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
                       3,00%
@@ -513,12 +551,14 @@ export default function ClientPresentation() {
               <div>
                 <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-200 print:text-slate-900 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-emerald-600" />
-                  Expectativa Total de Crédito / Devolução ao Cliente (Restituição + Indenização)
+                  {isDelayOption
+                    ? 'Expectativa Global de Crédito ao Cliente (Valor Pago + 1% Atraso)'
+                    : 'Expectativa Total de Crédito / Devolução ao Cliente (Restituição + Indenização)'}
                 </h3>
                 <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80 print:text-slate-600 mt-0.5">
-                  Devolução integral do valor quitado ({formatCurrencyBRL(calc.amountPaid)})
-                  acrescido do crédito indenizatório de 50% (
-                  {formatCurrencyBRL(calc.fineFiftyPercent)}) devido pela construtora ao cliente.
+                  {isDelayOption
+                    ? `Valor quitado (${formatCurrencyBRL(calc.amountPaid)}) acrescido da indenização de 1% (${formatCurrencyBRL(calc.onePercentAmountPaid)}) pelo atraso na entrega da obra.`
+                    : `Devolução integral do valor quitado (${formatCurrencyBRL(calc.amountPaid)}) acrescido do crédito indenizatório de 50% (${formatCurrencyBRL(calc.fineFiftyPercent)}) devido pela construtora ao cliente.`}
                 </p>
               </div>
               <div className="text-left sm:text-right">

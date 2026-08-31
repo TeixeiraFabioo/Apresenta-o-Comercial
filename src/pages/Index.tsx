@@ -7,6 +7,7 @@ import {
   formatCurrencyBRL,
   formatDateBRL,
   STATUS_LABELS,
+  SIMULATION_TYPE_CONFIG,
 } from '@/lib/calculations'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -114,7 +115,7 @@ export default function Index() {
     let totalFines = 0
 
     simulations.forEach((sim) => {
-      const calc = calculateLegalCosts(sim.property_value, sim.amount_paid)
+      const calc = calculateLegalCosts(sim.property_value, sim.amount_paid, sim.simulation_type)
       totalPropertiesValue += calc.propertyValue
       totalPaidValue += calc.amountPaid
       totalEstimated += calc.estimatedTotal
@@ -240,7 +241,7 @@ export default function Index() {
             <div className="text-2xl font-bold font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
               {formatCurrencyBRL(metrics.totalPaidValue)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Base de 1% e multa de 50%</p>
+            <p className="text-xs text-muted-foreground mt-1">Total desembolsado pelos clientes</p>
           </CardContent>
         </Card>
 
@@ -258,7 +259,7 @@ export default function Index() {
               {formatCurrencyBRL(metrics.totalEstimated)}
             </div>
             <p className="text-xs text-amber-800/80 dark:text-amber-400 mt-1 font-medium">
-              Soma: 1% pago + 50% multa (sem custas)
+              Conforme opção (Rescisão: 50% | Atraso: 1%)
             </p>
           </CardContent>
         </Card>
@@ -339,25 +340,23 @@ export default function Index() {
               <Table>
                 <TableHeader className="bg-slate-50/80 dark:bg-slate-900/50">
                   <TableRow>
-                    <TableHead className="w-[200px] text-xs font-semibold">
+                    <TableHead className="w-[190px] text-xs font-semibold">
                       Cliente / Contrato
                     </TableHead>
+                    <TableHead className="text-xs font-semibold">Modalidade</TableHead>
                     <TableHead className="text-xs font-semibold">Imóvel / Entrega</TableHead>
-                    <TableHead className="text-right text-xs font-semibold">
-                      Valor do Imóvel
-                    </TableHead>
                     <TableHead className="text-right text-xs font-semibold">Valor Pago</TableHead>
                     <TableHead
                       className="text-right text-xs font-semibold text-slate-700 dark:text-slate-300 font-mono"
-                      title="3% de (valor pago + multa) — Despesa isolada"
+                      title="Custas judiciais (3%) — Despesa isolada"
                     >
                       Custas (3%)*
                     </TableHead>
-                    <TableHead className="text-right text-xs font-semibold text-amber-700 dark:text-amber-400 font-mono">
-                      Multa (50%)
+                    <TableHead className="text-right text-xs font-semibold text-slate-900 dark:text-white font-mono">
+                      Rubrica Aplicável
                     </TableHead>
                     <TableHead className="text-right text-xs font-bold text-slate-900 dark:text-white font-mono">
-                      Total Estimado
+                      Total a Receber
                     </TableHead>
                     <TableHead className="text-center text-xs font-semibold">Status</TableHead>
                     <TableHead className="text-right text-xs font-semibold pr-6">Ações</TableHead>
@@ -365,9 +364,17 @@ export default function Index() {
                 </TableHeader>
                 <TableBody>
                   {filteredSimulations.map((sim) => {
-                    const calc = calculateLegalCosts(sim.property_value, sim.amount_paid)
+                    const calc = calculateLegalCosts(
+                      sim.property_value,
+                      sim.amount_paid,
+                      sim.simulation_type,
+                    )
                     const statusConfig =
                       STATUS_LABELS[sim.status || 'em_negociacao'] || STATUS_LABELS.em_negociacao
+                    const isDelay = sim.simulation_type === 'indenizacao_atraso'
+                    const typeConfig =
+                      SIMULATION_TYPE_CONFIG[sim.simulation_type || 'rescisao_contratual'] ||
+                      SIMULATION_TYPE_CONFIG.rescisao_contratual
 
                     return (
                       <TableRow
@@ -388,6 +395,16 @@ export default function Index() {
                           </div>
                         </TableCell>
 
+                        {/* Modalidade */}
+                        <TableCell className="text-xs py-3.5">
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] px-2 py-0.5 border font-semibold ${typeConfig.colorClasses}`}
+                          >
+                            {typeConfig.shortLabel}
+                          </Badge>
+                        </TableCell>
+
                         {/* Imóvel */}
                         <TableCell className="text-xs py-3.5">
                           <div className="font-medium text-slate-800 dark:text-slate-200">
@@ -399,18 +416,13 @@ export default function Index() {
                           </div>
                         </TableCell>
 
-                        {/* Valor Imóvel */}
-                        <TableCell className="text-right text-xs font-mono font-medium py-3.5">
-                          {formatCurrencyBRL(calc.propertyValue)}
-                        </TableCell>
-
                         {/* Valor Pago */}
                         <TableCell className="text-right text-xs font-mono font-medium py-3.5">
                           <div className="text-emerald-600 dark:text-emerald-400">
                             {formatCurrencyBRL(calc.amountPaid)}
                           </div>
                           <div className="text-[10px] text-muted-foreground">
-                            1%: {formatCurrencyBRL(calc.onePercentAmountPaid)}
+                            Imóvel: {formatCurrencyBRL(calc.propertyValue)}
                           </div>
                         </TableCell>
 
@@ -419,9 +431,23 @@ export default function Index() {
                           {formatCurrencyBRL(calc.judicialCosts)}
                         </TableCell>
 
-                        {/* Multa 50% */}
-                        <TableCell className="text-right text-xs font-mono font-medium py-3.5 text-slate-700 dark:text-slate-300">
-                          {formatCurrencyBRL(calc.fineFiftyPercent)}
+                        {/* Rubrica Aplicável */}
+                        <TableCell className="text-right text-xs font-mono font-medium py-3.5">
+                          {isDelay ? (
+                            <div>
+                              <span className="font-bold text-blue-700 dark:text-blue-300">
+                                {formatCurrencyBRL(calc.onePercentAmountPaid)}
+                              </span>
+                              <div className="text-[10px] text-muted-foreground">1% atraso</div>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                                {formatCurrencyBRL(calc.fineFiftyPercent)}
+                              </span>
+                              <div className="text-[10px] text-muted-foreground">Multa 50%</div>
+                            </div>
+                          )}
                         </TableCell>
 
                         {/* Total Estimado */}

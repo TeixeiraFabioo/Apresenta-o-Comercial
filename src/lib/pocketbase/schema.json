@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-31T16:18:59.344Z",
+  "generatedAt": "2026-08-31T16:35:03.449Z",
   "collections": [
     {
       "name": "users",
@@ -148,6 +148,13 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "simulation_type",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["rescisao_contratual", "indenizacao_atraso"]
         }
       ],
       "indexes": [

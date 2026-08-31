@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { createSimulation, getSimulationById, updateSimulation } from '@/services/simulacoes'
-import { SimulationFormData, SimulationStatus } from '@/types/simulation'
+import { SimulationFormData, SimulationStatus, SimulationType } from '@/types/simulation'
 import {
   calculateLegalCosts,
   formatCurrencyBRL,
   formatPercentBRL,
   getDeliveryDelayStatus,
   sanitizeNumber,
+  SIMULATION_TYPE_CONFIG,
 } from '@/lib/calculations'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -74,6 +75,7 @@ export default function SimulationForm() {
   const [developerName, setDeveloperName] = useState('')
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState<SimulationStatus>('apresentado')
+  const [simulationType, setSimulationType] = useState<SimulationType>('rescisao_contratual')
 
   // Carregar dados existentes no caso de edição
   useEffect(() => {
@@ -96,6 +98,11 @@ export default function SimulationForm() {
           setDeveloperName(record.developer_name || '')
           setNotes(record.notes || '')
           setStatus(record.status || 'em_negociacao')
+          setSimulationType(
+            record.simulation_type === 'indenizacao_atraso'
+              ? 'indenizacao_atraso'
+              : 'rescisao_contratual',
+          )
         } catch (err) {
           toast({
             variant: 'destructive',
@@ -113,8 +120,8 @@ export default function SimulationForm() {
 
   // Cálculos reativos em tempo real
   const calcResults = useMemo(() => {
-    return calculateLegalCosts(propertyValueRaw, amountPaidRaw)
-  }, [propertyValueRaw, amountPaidRaw])
+    return calculateLegalCosts(propertyValueRaw, amountPaidRaw, simulationType)
+  }, [propertyValueRaw, amountPaidRaw, simulationType])
 
   // Status de atraso contratual da obra
   const delayInfo = useMemo(() => {
@@ -177,6 +184,7 @@ export default function SimulationForm() {
       developer_name: developerName.trim() || undefined,
       notes: notes.trim() || undefined,
       status,
+      simulation_type: simulationType,
     }
 
     try {
@@ -220,6 +228,7 @@ export default function SimulationForm() {
     setNotes(
       'Atraso superior a 6 meses. Cliente busca rescisão contratual com devolução integral dos valores e aplicação da multa de 50%.',
     )
+    setSimulationType('rescisao_contratual')
     setStatus('apresentado')
   }
 
@@ -293,6 +302,112 @@ export default function SimulationForm() {
             </CardHeader>
 
             <CardContent className="p-5 space-y-5">
+              {/* Opção de Escolha / Tipo de Ação */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Modalidade do Pleito / Cálculo *
+                  </Label>
+                  <span className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
+                    Escolha uma das opções abaixo
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Opção 1: Rescisão Contratual */}
+                  <button
+                    type="button"
+                    onClick={() => setSimulationType('rescisao_contratual')}
+                    className={`relative p-3.5 rounded-xl text-left border-2 transition-all flex flex-col justify-between gap-2 ${
+                      simulationType === 'rescisao_contratual'
+                        ? 'border-amber-500 bg-amber-50/70 dark:bg-amber-950/40 shadow-sm ring-1 ring-amber-500/40'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 opacity-85 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                            simulationType === 'rescisao_contratual'
+                              ? 'border-amber-600 bg-amber-600'
+                              : 'border-slate-400 dark:border-slate-600'
+                          }`}
+                        >
+                          {simulationType === 'rescisao_contratual' && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                          Rescisão Contratual
+                        </span>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] font-mono border-amber-300 bg-amber-100/60 dark:bg-amber-950 text-amber-800 dark:text-amber-300"
+                      >
+                        Multa de 50%
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Aplica a{' '}
+                      <strong className="text-slate-800 dark:text-slate-200">multa de 50%</strong>{' '}
+                      sobre o valor pago. Não aplica o 1% por atraso.
+                    </p>
+                  </button>
+
+                  {/* Opção 2: Indenização por Atraso */}
+                  <button
+                    type="button"
+                    onClick={() => setSimulationType('indenizacao_atraso')}
+                    className={`relative p-3.5 rounded-xl text-left border-2 transition-all flex flex-col justify-between gap-2 ${
+                      simulationType === 'indenizacao_atraso'
+                        ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 shadow-sm ring-1 ring-blue-500/40'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 opacity-85 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                            simulationType === 'indenizacao_atraso'
+                              ? 'border-blue-600 bg-blue-600'
+                              : 'border-slate-400 dark:border-slate-600'
+                          }`}
+                        >
+                          {simulationType === 'indenizacao_atraso' && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                          Indenização por Atraso
+                        </span>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] font-mono border-blue-300 bg-blue-100/60 dark:bg-blue-950 text-blue-800 dark:text-blue-300"
+                      >
+                        1% ao mês
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Aplica o{' '}
+                      <strong className="text-slate-800 dark:text-slate-200">1% por atraso</strong>{' '}
+                      sobre o valor pago. A multa de 50%{' '}
+                      <strong className="text-rose-600 dark:text-rose-400">NÃO é devida</strong>.
+                    </p>
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5 px-0.5">
+                  <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>
+                    Regra: Se aplicável 1% pelo atraso, a multa de 50% não é devida (e vice-versa).
+                  </span>
+                </div>
+              </div>
+
+              <Separator className="bg-slate-200 dark:bg-slate-800" />
+
               {/* Valor do Imóvel Comprado */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -338,7 +453,9 @@ export default function SimulationForm() {
                     Valor efetivamente pago pelo cliente (R$) *
                   </Label>
                   <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
-                    Base para 1%, Multa de 50% e Custas
+                    {simulationType === 'rescisao_contratual'
+                      ? 'Base para Multa de 50% e Custas'
+                      : 'Base para 1% de Atraso e Custas'}
                   </span>
                 </div>
                 <div className="relative">
@@ -602,68 +719,95 @@ export default function SimulationForm() {
             </CardHeader>
 
             <CardContent className="p-5 space-y-4">
-              {/* Item 1: 1% do valor efetivamente pago */}
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1 transition-all hover:border-amber-400/50">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 flex items-center justify-center text-[10px] font-bold">
-                      1
-                    </span>
-                    1% do valor efetivamente pago
-                  </span>
-                  <span className="text-[11px] font-mono text-muted-foreground">
-                    {formatCurrencyBRL(calcResults.amountPaid)} × 1%
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between pt-1">
-                  <span className="text-[11px] text-muted-foreground">
-                    Taxa percentual sobre desembolso
-                  </span>
-                  <span className="text-base font-bold font-mono text-slate-900 dark:text-white">
-                    {formatCurrencyBRL(calcResults.onePercentAmountPaid)}
-                  </span>
-                </div>
+              {/* Badge indicativo do modo ativo */}
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs">
+                <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Scale className="w-3.5 h-3.5 text-amber-600" />
+                  Modo selecionado:
+                </span>
+                <Badge
+                  variant="outline"
+                  className={
+                    simulationType === 'rescisao_contratual'
+                      ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-300'
+                      : 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950 dark:text-blue-300'
+                  }
+                >
+                  {simulationType === 'rescisao_contratual'
+                    ? 'Rescisão Contratual'
+                    : 'Indenização por Atraso'}
+                </Badge>
               </div>
 
-              {/* Item 2: Multa de 50% sobre o valor efetivamente pago */}
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1 transition-all hover:border-amber-400/50">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 flex items-center justify-center text-[10px] font-bold">
-                      2
+              {/* Exibição condicional da rubrica aplicável conforme a escolha */}
+              {simulationType === 'indenizacao_atraso' ? (
+                /* Item 1: 1% do valor efetivamente pago (Indenização por Atraso) */
+                <div className="p-3.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/80 space-y-1 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">
+                        1
+                      </span>
+                      1% do valor efetivamente pago (Atraso)
                     </span>
-                    Multa de 50% sobre o valor pago
-                  </span>
-                  <span className="text-[11px] font-mono text-muted-foreground">
-                    {formatCurrencyBRL(calcResults.amountPaid)} × 50%
-                  </span>
+                    <span className="text-[11px] font-mono text-muted-foreground">
+                      {formatCurrencyBRL(calcResults.amountPaid)} × 1%
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      Indenização mensal pelo atraso na entrega
+                    </span>
+                    <span className="text-base font-bold font-mono text-blue-700 dark:text-blue-300">
+                      {formatCurrencyBRL(calcResults.onePercentAmountPaid)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-baseline justify-between pt-1">
-                  <span className="text-[11px] text-muted-foreground">
-                    Penalidade indenizatória por descumprimento
-                  </span>
-                  <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    {formatCurrencyBRL(calcResults.fineFiftyPercent)}
-                  </span>
+              ) : (
+                /* Item 2: Multa de 50% sobre o valor efetivamente pago (Rescisão Contratual) */
+                <div className="p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 space-y-1 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-600 text-white flex items-center justify-center text-[10px] font-bold">
+                        1
+                      </span>
+                      Multa de 50% sobre o valor pago (Rescisão)
+                    </span>
+                    <span className="text-[11px] font-mono text-muted-foreground">
+                      {formatCurrencyBRL(calcResults.amountPaid)} × 50%
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      Penalidade rescisória por descumprimento
+                    </span>
+                    <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                      {formatCurrencyBRL(calcResults.fineFiftyPercent)}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Item 3: Custas judiciais = 3% de (valor pago + multa) [Despesa Isolada] */}
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1 transition-all hover:border-amber-400/50">
+              {/* Item Custas Judiciais (3%) - Calculada conforme regra da modalidade */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1 transition-all">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                     <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 flex items-center justify-center text-[10px] font-bold">
-                      3
+                      2
                     </span>
-                    Custas judiciais (3% de pago + multa)
+                    Custas judiciais (3%)
                   </span>
                   <span className="text-[11px] font-mono text-muted-foreground">
-                    3% × {formatCurrencyBRL(calcResults.amountPaid + calcResults.fineFiftyPercent)}
+                    3% × {formatCurrencyBRL(calcResults.judicialCostsBase)}
                   </span>
                 </div>
                 <div className="flex items-baseline justify-between pt-1">
                   <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <span>Taxas processuais</span>
+                    <span>
+                      {simulationType === 'rescisao_contratual'
+                        ? 'Base: pago + multa 50%'
+                        : 'Base: valor pago (multa 50% não devida)'}
+                    </span>
                     <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
                       (despesa isolada)
                     </span>
@@ -676,7 +820,7 @@ export default function SimulationForm() {
 
               <Separator className="my-2 bg-slate-200 dark:bg-slate-700" />
 
-              {/* TOTAL ESTIMADO A RECEBER (1% pago + 50% multa - Sem incluir custas) */}
+              {/* TOTAL ESTIMADO A RECEBER PELO CLIENTE */}
               <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/15 via-amber-500/10 to-transparent border-2 border-amber-500/40 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
@@ -687,22 +831,34 @@ export default function SimulationForm() {
                     variant="outline"
                     className="bg-white/80 dark:bg-slate-900 text-[10px] font-mono border-amber-300"
                   >
-                    1% Pago + 50% Multa
+                    {simulationType === 'rescisao_contratual'
+                      ? 'Multa 50% (Rescisão)'
+                      : '1% Pago (Atraso)'}
                   </Badge>
                 </div>
                 <div className="flex items-baseline justify-between pt-2">
                   <span className="text-xs text-slate-600 dark:text-slate-400">
-                    Total estimado a receber:
+                    Total a receber pelo cliente:
                   </span>
                   <span className="text-2xl font-black font-mono tracking-tight text-slate-950 dark:text-amber-200">
                     {formatCurrencyBRL(calcResults.estimatedTotal)}
                   </span>
                 </div>
                 <p className="text-[10px] text-amber-800/80 dark:text-amber-400/80 pt-1">
-                  = 1% pago ({formatCurrencyBRL(calcResults.onePercentAmountPaid)}) + 50% multa (
-                  {formatCurrencyBRL(calcResults.fineFiftyPercent)}) • Custas judiciais (
-                  {formatCurrencyBRL(calcResults.judicialCosts)}) constituem despesa processual
-                  isolada.
+                  {simulationType === 'rescisao_contratual' ? (
+                    <>
+                      = Apenas a multa de 50% ({formatCurrencyBRL(calcResults.fineFiftyPercent)}) •
+                      O 1% por atraso não é aplicável.
+                    </>
+                  ) : (
+                    <>
+                      = Apenas o 1% do valor pago (
+                      {formatCurrencyBRL(calcResults.onePercentAmountPaid)}) • A multa de 50% não é
+                      devida.
+                    </>
+                  )}{' '}
+                  Custas judiciais ({formatCurrencyBRL(calcResults.judicialCosts)}) constituem
+                  despesa isolada.
                 </p>
               </div>
 
@@ -711,15 +867,18 @@ export default function SimulationForm() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    Potencial de Restituição ao Cliente
+                    {simulationType === 'rescisao_contratual'
+                      ? 'Potencial de Restituição (100% Pago + Multa 50%)'
+                      : 'Expectativa Global (Valor Pago + 1% Atraso)'}
                   </span>
                   <span className="text-xs font-bold font-mono text-emerald-700 dark:text-emerald-300">
                     {formatCurrencyBRL(calcResults.potentialRecoveryTotal)}
                   </span>
                 </div>
                 <p className="text-[10px] text-emerald-800/80 dark:text-emerald-400 mt-1">
-                  100% do valor pago ({formatCurrencyBRL(calcResults.amountPaid)}) + 50% de multa (
-                  {formatCurrencyBRL(calcResults.fineFiftyPercent)}).
+                  {simulationType === 'rescisao_contratual'
+                    ? `100% do valor pago (${formatCurrencyBRL(calcResults.amountPaid)}) + 50% de multa (${formatCurrencyBRL(calcResults.fineFiftyPercent)}).`
+                    : `Valor pago (${formatCurrencyBRL(calcResults.amountPaid)}) + indenização de 1% (${formatCurrencyBRL(calcResults.onePercentAmountPaid)}).`}
                 </p>
               </div>
             </CardContent>
