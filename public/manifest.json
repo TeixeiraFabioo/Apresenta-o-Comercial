@@ -1,0 +1,18 @@
+{
+  "name": "Gestão de Contratos Imobiliários - Cálculos de Custas",
+  "short_name": "Custas Imobiliárias",
+  "description": "Calculadora e Gerador de Apresentação de Custas Judiciais Imobiliárias 100% Offline",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://cortex-dev-skip-artifacts.s3.amazonaws.com/skip-developer/6673f443-41e7-4029-9e45-f0bf82be34aa.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
