@@ -79,7 +79,7 @@ export default function Layout() {
           >
             <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-black border border-amber-500/30 shadow-md shadow-amber-500/10 group-hover:scale-105 transition-transform shrink-0">
               <img
-                src="https://cortex-dev-skip-artifacts.s3.amazonaws.com/skip-developer/6673f443-41e7-4029-9e45-f0bf82be34aa.png"
+                src="/visual-edits/teixeira-10-01df62bf.png"
                 alt="Teixeira & Ferreira Advogados Logo"
                 className="w-full h-full object-contain"
               />
