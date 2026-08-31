@@ -271,7 +271,7 @@ export default function Index() {
             <div>
               <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5 text-amber-600" />
-                Simulações Salvas do Usuário
+                Simulações
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
                 Planilhas arquivadas para visualização, edição ou impressão do documento ao cliente.
