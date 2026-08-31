@@ -64,7 +64,7 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
       await loginAsDemo()
       toast({
         title: 'Acesso rápido com usuário padrão!',
-        description: 'Conectado como Dr. Fabio Santos.',
+        description: 'Conectado como Dr. Fábio Teixeira.',
       })
       onClose()
     } catch (err: unknown) {

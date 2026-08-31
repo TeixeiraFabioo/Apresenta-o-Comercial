@@ -249,7 +249,7 @@ export default function SimulationForm() {
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
             <Calculator className="w-6 h-6 text-amber-600" />
-            {isEditing ? 'Editar Planilha de Custas' : 'Nova Planilha de Custas Judiciais'}
+            {isEditing ? 'Editar Apresentação' : 'Apresentação'}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Preencha os dados contratuais do imóvel para computar instantaneamente o demonstrativo

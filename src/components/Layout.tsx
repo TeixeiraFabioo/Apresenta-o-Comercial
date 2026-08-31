@@ -56,7 +56,7 @@ export default function Layout() {
     if (email) {
       return email.slice(0, 2).toUpperCase()
     }
-    return 'CJ'
+    return 'FT'
   }
 
   const isPresentationRoute = location.pathname.includes('/apresentacao/')

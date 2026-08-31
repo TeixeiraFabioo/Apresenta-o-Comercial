@@ -200,7 +200,7 @@ export default function ClientPresentation() {
                 </div>
                 <div>
                   <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white print:text-slate-900 leading-tight">
-                    DEMONSTRATIVO DE CUSTAS JUDICIAIS E PENALIDADES
+                    DEMONSTRATIVO DE CRÉDITOS E RESTITUIÇÃO AO CLIENTE
                   </h1>
                   <p className="text-xs text-amber-300 print:text-slate-600 font-medium">
                     Apresentação Prévia para Fechamento de Contrato de Honorários & Ação Judicial
@@ -306,7 +306,7 @@ export default function ClientPresentation() {
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
                 <FileSpreadsheet className="w-4 h-4 text-amber-600" />
-                Planilha de Apuração das Custas e Penalidades
+                Planilha de Apuração de Valores a Receber e Custas
               </h2>
               <span className="text-xs text-muted-foreground font-mono">
                 Moeda: Real Brasileiro (BRL)
@@ -407,17 +407,18 @@ export default function ClientPresentation() {
                     </TableCell>
                   </TableRow>
 
-                  {/* Rubrica 2: Multa de 50% sobre o valor efetivamente pago */}
+                  {/* Rubrica 2: Indenização de 50% em favor do cliente */}
                   <TableRow className="hover:bg-amber-50/30">
                     <TableCell className="text-center font-mono font-bold text-amber-700 dark:text-amber-400">
                       02
                     </TableCell>
                     <TableCell>
                       <div className="font-bold text-slate-900 dark:text-white print:text-slate-900">
-                        Multa de 50% sobre o valor efetivamente pago
+                        Indenização de 50% sobre o valor pago (devida pela construtora ao cliente)
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        Penalidade compensatória contratual incidente sobre o montante pago
+                        Crédito indenizatório contratual aplicado contra a construtora em favor do
+                        comprador
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono text-emerald-700 dark:text-emerald-400">
@@ -431,7 +432,7 @@ export default function ClientPresentation() {
                     </TableCell>
                   </TableRow>
 
-                  {/* LINHA DE TOTALIZAÇÃO ESTIMADA A RECEBER (1% pago + 50% multa) */}
+                  {/* LINHA DE TOTALIZAÇÃO ESTIMADA A RECEBER (1% pago + 50% indenização) */}
                   <TableRow className="bg-amber-100/70 dark:bg-amber-950/40 border-t-2 border-amber-500/50 print:bg-slate-200 print:border-slate-900">
                     <TableCell className="text-center font-mono font-black text-amber-900 dark:text-amber-200">
                       Σ
@@ -440,14 +441,14 @@ export default function ClientPresentation() {
                       colSpan={3}
                       className="font-bold text-slate-950 dark:text-white print:text-slate-900 text-sm"
                     >
-                      TOTAL ESTIMADO A RECEBER (1% PAGO + 50% MULTA)
+                      TOTAL ESTIMADO A RECEBER PELO CLIENTE (1% PAGO + 50% INDENIZAÇÃO)
                     </TableCell>
                     <TableCell className="text-right font-mono font-black text-slate-950 dark:text-amber-200 print:text-slate-900 text-base pr-6">
                       {formatCurrencyBRL(calc.estimatedTotal)}
                     </TableCell>
                   </TableRow>
 
-                  {/* Rubrica 3: Custas judiciais = 3% de (valor efetivamente pago + valor da multa) - Despesa Isolada */}
+                  {/* Rubrica 3: Custas judiciais = 3% de (valor efetivamente pago + indenização) - Despesa Isolada */}
                   <TableRow className="bg-slate-50/80 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-700">
                     <TableCell className="text-center font-mono font-semibold text-slate-500">
                       *
@@ -457,9 +458,9 @@ export default function ClientPresentation() {
                         <span>Custas judiciais estimadas (Despesa Processual Isolada)</span>
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        Estimativa de 3,00% sobre a soma do valor efetivamente pago e a multa (
-                        {formatCurrencyBRL(calc.amountPaid + calc.fineFiftyPercent)}). Não compõe o
-                        montante a receber.
+                        Estimativa de 3,00% sobre a soma do valor efetivamente pago e a indenização
+                        devida ({formatCurrencyBRL(calc.amountPaid + calc.fineFiftyPercent)}). Não
+                        compõe o montante a receber.
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono text-slate-600 dark:text-slate-400">
@@ -483,11 +484,12 @@ export default function ClientPresentation() {
               <div>
                 <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-200 print:text-slate-900 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-emerald-600" />
-                  Expectativa de Crédito / Devolução ao Cliente (Restituição + Multa)
+                  Expectativa Total de Crédito / Devolução ao Cliente (Restituição + Indenização)
                 </h3>
                 <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80 print:text-slate-600 mt-0.5">
                   Devolução integral do valor quitado ({formatCurrencyBRL(calc.amountPaid)})
-                  acrescido da penalidade de 50% ({formatCurrencyBRL(calc.fineFiftyPercent)}).
+                  acrescido do crédito indenizatório de 50% (
+                  {formatCurrencyBRL(calc.fineFiftyPercent)}) devido pela construtora ao cliente.
                 </p>
               </div>
               <div className="text-left sm:text-right">

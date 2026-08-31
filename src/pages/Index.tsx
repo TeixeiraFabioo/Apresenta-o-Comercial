@@ -166,9 +166,9 @@ export default function Index() {
             </h1>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
               <span className="text-amber-300 font-semibold">
-                <font color="#cbd5e1">
+                <span className="text-slate-300">
                   <span>Análise e parecer inicial</span>
-                </font>
+                </span>
                 &nbsp;Viabilidade do Cliente
               </span>
             </p>
