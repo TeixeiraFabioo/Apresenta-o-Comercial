@@ -165,14 +165,12 @@ export default function Index() {
               Dashboard - GCI
             </h1>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-              Elabore planilhas rápidas para demonstração ao cliente, calculando automaticamente
-              <span className="text-amber-300 font-semibold"> 1% do valor pago</span>,
               <span className="text-amber-300 font-semibold">
-                {' '}
-                3% de custas judiciais (sobre valor pago + multa)
-              </span>{' '}
-              e a<span className="text-amber-300 font-semibold"> multa de 50%</span> prevista
-              contratualmente.
+                <font color="#cbd5e1">
+                  <span>Análise e parecer inicial</span>
+                </font>
+                &nbsp;Viabilidade do Cliente
+              </span>
             </p>
           </div>
 
