@@ -39,20 +39,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   useEffect(() => {
-    // Carrega o usuário atual se o token for válido
-    if (pb.authStore.isValid && pb.authStore.record) {
-      syncAuth(pb.authStore.record)
-    } else {
-      // Se não houver autenticação ativa, tenta login padrão silencioso de conveniência
-      autoLoginDefaultUser()
+    let isMounted = true
+
+    const initAuth = async () => {
+      if (pb.authStore.isValid && pb.authStore.record) {
+        // Primeiro sincroniza com o cache local para exibição rápida
+        syncAuth(pb.authStore.record)
+        // Sempre revalida e atualiza com o backend para não manter dados antigos em cache
+        try {
+          const authData = await pb.collection('users').authRefresh()
+          if (isMounted && authData?.record) {
+            syncAuth(authData.record)
+          }
+        } catch (_) {
+          // Se o refresh falhar (ex: token expirado), tenta o login automático padrão
+          if (isMounted) {
+            await autoLoginDefaultUser()
+          }
+        }
+      } else {
+        // Se não houver autenticação ativa, tenta login padrão silencioso de conveniência
+        await autoLoginDefaultUser()
+      }
+      if (isMounted) {
+        setIsLoading(false)
+      }
     }
-    setIsLoading(false)
+
+    initAuth()
 
     const unsubscribe = pb.authStore.onChange((_token, model) => {
-      syncAuth(model)
+      if (isMounted) {
+        syncAuth(model)
+      }
     })
 
     return () => {
+      isMounted = false
       unsubscribe()
     }
   }, [])
