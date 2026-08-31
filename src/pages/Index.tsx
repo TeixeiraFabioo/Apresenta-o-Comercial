@@ -162,7 +162,7 @@ export default function Index() {
               <span>Painel de Fechamento de Contrato Imobiliário</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              Cálculo de Custas Judiciais e Multa Rescisória
+              Dashboard - GCI
             </h1>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
               Elabore planilhas rápidas para demonstração ao cliente, calculando automaticamente
