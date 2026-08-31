@@ -87,7 +87,7 @@ export default function Layout() {
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-base sm:text-lg tracking-tight text-slate-900 dark:text-white leading-none">
-                  Planilha de Custas
+                  Gestão de Contratos Imobiliários
                 </span>
                 <span className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300/60">
                   Imobiliário
