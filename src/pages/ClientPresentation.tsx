@@ -190,31 +190,60 @@ export default function ClientPresentation() {
 
       {/* DOCUMENTO DE APRESENTAÇÃO AO CLIENTE (O que vai para o papel / PDF) */}
       <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl sm:rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xl overflow-hidden print:shadow-none print:border-none print:rounded-none">
-        {/* Cabeçalho do Documento */}
-        <div className="p-6 sm:p-8 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white print:bg-none print:text-slate-900 print:border-b-2 print:border-slate-900 print:p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-md print:border print:border-slate-900">
-                  <Scale className="w-5 h-5" />
+        {/* Cabeçalho do Documento com Identidade do Escritório */}
+        <div className="p-6 sm:p-8 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white print:bg-white print:text-slate-900 print:border-b-2 print:border-slate-900 print:p-4">
+          {/* Topo do Cabeçalho: Identidade Visual do Escritório / Advogado */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-700/60 print:border-slate-300 print:pb-3">
+            <div className="flex items-center gap-3.5">
+              {/* Logotipo do Escritório */}
+              <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center bg-black border border-amber-500/40 shadow-lg shadow-amber-500/10 shrink-0 print:shadow-none print:border-slate-800 print:w-12 print:h-12">
+                <img
+                  src="/visual-edits/teixeira-10-7cbfd7bf.png"
+                  alt="Teixeira & Ferreira Advogados"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-base sm:text-lg font-bold tracking-tight text-white print:text-slate-900 leading-tight">
+                    Teixeira &amp; Ferreira Advogados Associados
+                  </span>
                 </div>
-                <div>
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white print:text-slate-900 leading-tight">
-                    DEMONSTRATIVO DE CRÉDITOS E RESTITUIÇÃO AO CLIENTE
-                  </h1>
-                  <p className="text-xs text-amber-300 print:text-slate-600 font-medium">
-                    Apresentação Prévia para Fechamento de Contrato de Honorários & Ação Judicial
-                  </p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-300 print:text-slate-600 font-medium mt-0.5">
+                  <span className="text-amber-400 print:text-slate-800 font-semibold">
+                    {lawyerName}
+                  </span>
+                  <span className="text-slate-500 print:text-slate-400">•</span>
+                  <span>Direito Imobiliário &amp; Contratos</span>
                 </div>
               </div>
             </div>
 
             <div className="text-left sm:text-right space-y-0.5 text-xs text-slate-300 print:text-slate-700">
-              <div className="font-semibold text-white print:text-slate-900">{lawyerName}</div>
-              <div>Consultoria & Contencioso Imobiliário</div>
-              <div className="text-[11px] text-amber-400/90 print:text-slate-500 font-medium">
-                Emissão: {currentDateFormatted}
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 print:bg-slate-100 print:border-slate-300 print:text-slate-800 font-semibold text-[11px]">
+                <span>Parecer &amp; Apresentação Comercial</span>
               </div>
+              <div className="text-[11px] text-slate-400 print:text-slate-600 font-medium pt-1">
+                Data de Emissão:{' '}
+                <span className="font-semibold text-slate-200 print:text-slate-900">
+                  {currentDateFormatted}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Título do Documento */}
+          <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <h1 className="text-lg sm:text-xl font-black tracking-tight text-white print:text-slate-900 leading-snug">
+                DEMONSTRATIVO DE CRÉDITOS E RESTITUIÇÃO AO CLIENTE
+              </h1>
+              <p className="text-xs text-amber-300/90 print:text-slate-600 font-medium">
+                Apresentação Prévia para Fechamento de Contrato de Honorários &amp; Ação Judicial
+              </p>
+            </div>
+            <div className="text-left sm:text-right text-[11px] text-slate-400 print:text-slate-500 font-mono">
+              Ref.: {simulation.property_name || 'Simulação'}
             </div>
           </div>
         </div>
