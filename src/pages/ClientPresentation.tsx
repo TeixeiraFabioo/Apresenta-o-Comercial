@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { getSimulationById, updateSimulation } from '@/services/simulacoes'
 import { SimulationRecord, SimulationStatus } from '@/types/simulation'
+import { isNotFoundError } from '@/lib/pocketbase/errors'
 import {
   calculateLegalCosts,
   formatCurrencyBRL,
@@ -58,14 +59,22 @@ export default function ClientPresentation() {
     if (!id) return
     const fetchRecord = async () => {
       try {
-        const record = await getSimulationById(id)
+        const record = await getSimulationById(id, user?.id)
         setSimulation(record)
       } catch (err) {
-        toast({
-          variant: 'destructive',
-          title: 'Erro ao carregar',
-          description: 'Não foi possível carregar a apresentação desta simulação.',
-        })
+        if (isNotFoundError(err)) {
+          toast({
+            variant: 'destructive',
+            title: 'Simulação não encontrada',
+            description: 'Esta simulação já foi excluída — atualize a lista.',
+          })
+        } else {
+          toast({
+            variant: 'destructive',
+            title: 'Erro ao carregar',
+            description: 'Não foi possível carregar a apresentação desta simulação.',
+          })
+        }
         navigate('/')
       } finally {
         setLoading(false)
@@ -73,7 +82,7 @@ export default function ClientPresentation() {
     }
 
     fetchRecord()
-  }, [id, navigate, toast])
+  }, [id, user?.id, navigate, toast])
 
   const calc = useMemo(() => {
     if (!simulation) return null
@@ -103,10 +112,19 @@ export default function ClientPresentation() {
         description: `Proposta marcada como "${STATUS_LABELS[newStatus]?.label || newStatus}".`,
       })
     } catch (err) {
-      toast({
-        variant: 'destructive',
-        title: 'Erro ao atualizar status',
-      })
+      if (isNotFoundError(err)) {
+        toast({
+          variant: 'destructive',
+          title: 'Simulação não encontrada',
+          description: 'Esta simulação já foi excluída — atualize a lista.',
+        })
+        navigate('/')
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Erro ao atualizar status',
+        })
+      }
     }
   }
 

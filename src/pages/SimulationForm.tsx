@@ -10,6 +10,7 @@ import {
   sanitizeNumber,
   SIMULATION_TYPE_CONFIG,
 } from '@/lib/calculations'
+import { isNotFoundError } from '@/lib/pocketbase/errors'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,7 +56,7 @@ export default function SimulationForm() {
   const { id } = useParams<{ id: string }>()
   const isEditing = Boolean(id)
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuth()
+  const { user, isAuthenticated } = useAuth()
   const { toast } = useToast()
 
   const [loading, setLoading] = useState(false)
@@ -82,7 +83,7 @@ export default function SimulationForm() {
     if (isEditing && id) {
       const fetchRecord = async () => {
         try {
-          const record = await getSimulationById(id)
+          const record = await getSimulationById(id, user?.id)
           setClientName(record.client_name || '')
           setClientDocument(record.client_document || '')
           setPropertyName(record.property_name || '')
@@ -104,11 +105,19 @@ export default function SimulationForm() {
               : 'rescisao_contratual',
           )
         } catch (err) {
-          toast({
-            variant: 'destructive',
-            title: 'Erro ao carregar simulação',
-            description: 'Não foi possível carregar os dados desta simulação.',
-          })
+          if (isNotFoundError(err)) {
+            toast({
+              variant: 'destructive',
+              title: 'Simulação não encontrada',
+              description: 'Esta simulação já foi excluída — atualize a lista.',
+            })
+          } else {
+            toast({
+              variant: 'destructive',
+              title: 'Erro ao carregar simulação',
+              description: 'Não foi possível carregar os dados desta simulação.',
+            })
+          }
           navigate('/')
         } finally {
           setInitialLoading(false)
@@ -116,7 +125,7 @@ export default function SimulationForm() {
       }
       fetchRecord()
     }
-  }, [id, isEditing, navigate, toast])
+  }, [id, isEditing, user?.id, navigate, toast])
 
   // Cálculos reativos em tempo real
   const calcResults = useMemo(() => {
@@ -204,12 +213,21 @@ export default function SimulationForm() {
         navigate(`/apresentacao/${created.id}`)
       }
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Falha ao salvar'
-      toast({
-        variant: 'destructive',
-        title: 'Erro ao salvar',
-        description: errorMsg || 'Verifique sua conexão com o banco de dados.',
-      })
+      if (isNotFoundError(err)) {
+        toast({
+          variant: 'destructive',
+          title: 'Simulação não encontrada',
+          description: 'Esta simulação já foi excluída — atualize a lista.',
+        })
+        navigate('/')
+      } else {
+        const errorMsg = err instanceof Error ? err.message : 'Falha ao salvar'
+        toast({
+          variant: 'destructive',
+          title: 'Erro ao salvar',
+          description: errorMsg || 'Verifique sua conexão com o banco de dados.',
+        })
+      }
     } finally {
       setLoading(false)
     }

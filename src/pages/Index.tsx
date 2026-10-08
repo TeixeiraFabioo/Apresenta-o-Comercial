@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSimulations, deleteSimulation } from '@/services/simulacoes'
+import { getSimulations, deleteSimulation, getSimulationById } from '@/services/simulacoes'
 import { SimulationRecord } from '@/types/simulation'
+import { isNotFoundError } from '@/lib/pocketbase/errors'
 import {
   calculateLegalCosts,
   formatCurrencyBRL,
@@ -74,9 +75,14 @@ export default function Index() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const loadData = async () => {
+    if (!user?.id) {
+      setSimulations([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
-      const records = await getSimulations(searchTerm)
+      const records = await getSimulations(searchTerm, user.id)
       setSimulations(records)
     } catch (err) {
       console.error(err)
@@ -91,16 +97,18 @@ export default function Index() {
   }
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && user?.id) {
       loadData()
     } else {
-      // Se ainda não estiver logado, o AuthProvider tentará o auto-login
+      // Se ainda não estiver logado, aguarda sincronização de autenticação
       const timer = setTimeout(() => {
-        loadData()
+        if (user?.id) {
+          loadData()
+        }
       }, 500)
       return () => clearTimeout(timer)
     }
-  }, [isAuthenticated, searchTerm])
+  }, [isAuthenticated, user?.id, searchTerm])
 
   const filteredSimulations = useMemo(() => {
     if (statusFilter === 'todos') return simulations
@@ -131,6 +139,50 @@ export default function Index() {
     }
   }, [simulations])
 
+  const handleOpenPresentation = async (simId: string) => {
+    try {
+      await getSimulationById(simId, user?.id)
+      navigate(`/apresentacao/${simId}`)
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        toast({
+          variant: 'destructive',
+          title: 'Simulação não encontrada',
+          description: 'Esta simulação já foi excluída — atualize a lista.',
+        })
+        setSimulations((prev) => prev.filter((s) => s.id !== simId))
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Erro ao abrir simulação',
+          description: 'Não foi possível abrir a apresentação no momento.',
+        })
+      }
+    }
+  }
+
+  const handleEditSimulation = async (simId: string) => {
+    try {
+      await getSimulationById(simId, user?.id)
+      navigate(`/editar-simulacao/${simId}`)
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        toast({
+          variant: 'destructive',
+          title: 'Simulação não encontrada',
+          description: 'Esta simulação já foi excluída — atualize a lista.',
+        })
+        setSimulations((prev) => prev.filter((s) => s.id !== simId))
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Erro ao abrir edição',
+          description: 'Não foi possível carregar a simulação para edição.',
+        })
+      }
+    }
+  }
+
   const handleDelete = async () => {
     if (!deletingId) return
     try {
@@ -141,11 +193,20 @@ export default function Index() {
       })
       setSimulations((prev) => prev.filter((s) => s.id !== deletingId))
     } catch (err) {
-      toast({
-        variant: 'destructive',
-        title: 'Erro ao excluir',
-        description: 'Não foi possível remover a simulação.',
-      })
+      if (isNotFoundError(err)) {
+        toast({
+          variant: 'destructive',
+          title: 'Simulação não encontrada',
+          description: 'Esta simulação já foi excluída — atualize a lista.',
+        })
+        setSimulations((prev) => prev.filter((s) => s.id !== deletingId))
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Erro ao excluir',
+          description: 'Não foi possível remover a simulação.',
+        })
+      }
     } finally {
       setDeletingId(null)
     }
@@ -471,7 +532,7 @@ export default function Index() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => navigate(`/apresentacao/${sim.id}`)}
+                              onClick={() => handleOpenPresentation(sim.id)}
                               className="h-8 px-2.5 text-xs text-amber-700 hover:text-amber-800 hover:bg-amber-100/60 dark:text-amber-400 dark:hover:bg-amber-950/40 font-semibold"
                               title="Visualizar Apresentação do Cliente"
                             >
@@ -495,14 +556,14 @@ export default function Index() {
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
-                                  onClick={() => navigate(`/apresentacao/${sim.id}`)}
+                                  onClick={() => handleOpenPresentation(sim.id)}
                                   className="cursor-pointer text-xs"
                                 >
                                   <FileText className="w-4 h-4 mr-2 text-blue-600" />
                                   Visualizar e Imprimir
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => navigate(`/editar-simulacao/${sim.id}`)}
+                                  onClick={() => handleEditSimulation(sim.id)}
                                   className="cursor-pointer text-xs"
                                 >
                                   <Edit className="w-4 h-4 mr-2 text-amber-600" />

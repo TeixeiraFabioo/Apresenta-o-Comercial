@@ -7,17 +7,30 @@ const COLLECTION = 'simulacoes'
  * Obtém a lista de todas as simulações pertencentes ao usuário autenticado,
  * ordenadas da mais recente para a mais antiga.
  */
-export async function getSimulations(searchQuery?: string): Promise<SimulationRecord[]> {
+export async function getSimulations(
+  searchQuery?: string,
+  userId?: string,
+): Promise<SimulationRecord[]> {
   try {
-    let filter = ''
+    const currentUserId = userId || pb.authStore.record?.id
+    if (!currentUserId) {
+      return []
+    }
+
+    const filters: string[] = [`user = '${currentUserId}'`]
+
     if (searchQuery && searchQuery.trim()) {
       const q = searchQuery.trim().replace(/'/g, "\\'")
-      filter = `client_name ~ '${q}' || property_name ~ '${q}' || contract_number ~ '${q}' || developer_name ~ '${q}'`
+      filters.push(
+        `(client_name ~ '${q}' || property_name ~ '${q}' || contract_number ~ '${q}' || developer_name ~ '${q}')`,
+      )
     }
+
+    const filterString = filters.join(' && ')
 
     const records = await pb.collection(COLLECTION).getFullList<SimulationRecord>({
       sort: '-created',
-      filter: filter || undefined,
+      filter: filterString,
     })
 
     return records
@@ -30,9 +43,19 @@ export async function getSimulations(searchQuery?: string): Promise<SimulationRe
 /**
  * Obtém uma simulação específica pelo ID
  */
-export async function getSimulationById(id: string): Promise<SimulationRecord> {
+export async function getSimulationById(id: string, userId?: string): Promise<SimulationRecord> {
   try {
     const record = await pb.collection(COLLECTION).getOne<SimulationRecord>(id)
+    const currentUserId = userId || pb.authStore.record?.id
+
+    if (currentUserId && record.user && record.user !== currentUserId) {
+      const notFoundErr = new Error(
+        'Esta simulação não foi encontrada ou pertence a outro usuário.',
+      )
+      ;(notFoundErr as unknown as { status: number }).status = 404
+      throw notFoundErr
+    }
+
     return record
   } catch (error) {
     console.error(`Erro ao buscar simulação id ${id}:`, error)
