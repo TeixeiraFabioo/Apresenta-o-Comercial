@@ -191,28 +191,7 @@ export default function Layout() {
       </main>
 
       {/* Rodapé Fino Legal (Oculto na Impressão) */}
-      <footer className="print:hidden border-t border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-xs py-6 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left">
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
-              §
-            </div>
-            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 max-w-3xl">
-              <span className="font-semibold text-slate-700 dark:text-slate-300">
-                Aviso legal:{' '}
-              </span>
-              Valores estimados para apresentação inicial — a base de cálculo definitiva será
-              apurada na data do ajuizamento da ação com atualização monetária e juros de mora
-              legais.
-            </p>
-          </div>
-          <div className="flex items-center gap-4 text-[11px] text-muted-foreground shrink-0">
-            <span>Planilha de Custas v2.4</span>
-            <span>•</span>
-            <span>Direito Imobiliário</span>
-          </div>
-        </div>
-      </footer>
+      <footer className="print:hidden border-t border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-xs py-6 mt-auto"></footer>
 
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </div>
