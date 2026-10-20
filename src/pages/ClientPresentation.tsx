@@ -5,6 +5,7 @@ import { SimulationRecord, SimulationStatus } from '@/types/simulation'
 import { isNotFoundError } from '@/lib/pocketbase/errors'
 import {
   calculateLegalCosts,
+  CORRECTION_INDEX_LABELS,
   formatCurrencyBRL,
   formatDateBRL,
   formatPercentBRL,
@@ -90,12 +91,21 @@ export default function ClientPresentation() {
       simulation.property_value,
       simulation.amount_paid,
       simulation.simulation_type,
+      {
+        expectedDeliveryDate: simulation.expected_delivery_date,
+        referenceDate: simulation.reference_date,
+        custasRate: simulation.custas_rate,
+        correctionEnabled: simulation.correction_enabled,
+        correctionIndex: simulation.correction_index,
+        correctionRate: simulation.correction_rate,
+        correctionStartDate: simulation.correction_start_date,
+      },
     )
   }, [simulation])
 
   const delay = useMemo(() => {
     if (!simulation) return null
-    return getDeliveryDelayStatus(simulation.expected_delivery_date)
+    return getDeliveryDelayStatus(simulation.expected_delivery_date, simulation.reference_date)
   }, [simulation])
 
   const handlePrint = () => {
@@ -340,7 +350,7 @@ export default function ClientPresentation() {
             </div>
           </div>
 
-          {/* Quadro de Prazos e Status do Contrato */}
+          {/* Quadro de Prazos, Data de Referência e Status do Contrato */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
               <span className="text-[11px] text-muted-foreground block font-medium">
@@ -362,12 +372,10 @@ export default function ClientPresentation() {
 
             <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
               <span className="text-[11px] text-muted-foreground block font-medium">
-                Situação do Prazo
+                Data de Referência
               </span>
-              <span
-                className={`text-xs font-bold ${delay?.isDelayed ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}
-              >
-                {delay?.text}
+              <span className="text-sm font-bold text-slate-900 dark:text-white font-mono">
+                {formatDateBRL(simulation.reference_date || calc.referenceDate)}
               </span>
             </div>
 
@@ -380,6 +388,28 @@ export default function ClientPresentation() {
               </span>
             </div>
           </div>
+
+          {/* Aviso Explícito de Carência de 180 dias quando aplicável */}
+          {isDelayOption && calc.isWithinGracePeriod && (
+            <div className="p-4 rounded-xl border-2 border-amber-500/50 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-bold text-sm block">
+                  Prazo dentro do Período de Carência Contratual / Legal de 180 dias
+                </span>
+                <p className="leading-relaxed">
+                  O atraso apurado na data de referência ({calc.delayDays} dias) ainda não superou o
+                  prazo legal de carência de 180 dias (faltam{' '}
+                  <strong className="text-amber-950 dark:text-white">
+                    {calc.daysToGraceEnd} dias
+                  </strong>
+                  ). Por força da Lei nº 13.786/2018 (Lei do Distrato) e do contrato, a indenização
+                  de 1% ao mês por atraso <strong>ainda não é devida</strong> nesta data de
+                  apuração.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* TABELA PRINCIPAL DA PLANILHA DE CÁLCULO */}
           <div className="space-y-3">
@@ -464,25 +494,27 @@ export default function ClientPresentation() {
 
                   {/* Exibição apenas da rubrica aplicável conforme a opção escolhida */}
                   {isDelayOption ? (
-                    /* Rubrica Única Aplicável: 1% do valor efetivamente pago por atraso */
+                    /* Rubrica Única Aplicável: 1% ao mês de atraso sobre o valor efetivamente pago */
                     <TableRow className="hover:bg-blue-50/30">
                       <TableCell className="text-center font-mono font-bold text-blue-700 dark:text-blue-400">
                         01
                       </TableCell>
                       <TableCell>
                         <div className="font-bold text-slate-900 dark:text-white print:text-slate-900">
-                          1% do valor efetivamente pago (Indenização por Atraso)
+                          1% ao mês de atraso ({calc.delayMonths}{' '}
+                          {calc.delayMonths === 1 ? 'mês' : 'meses'} apurados)
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          Cálculo indenizatório de 1,00% sobre o total quitado (
-                          {formatCurrencyBRL(calc.amountPaid)}). Multa de 50% não devida.
+                          {calc.isWithinGracePeriod
+                            ? `Carência de 180 dias não superada (${calc.delayDays} dias de atraso na data de referência; faltam ${calc.daysToGraceEnd} dias). Indenização não devida.`
+                            : `Indenização mensal de 1,00% × ${calc.delayMonths} meses sobre o total quitado (${formatCurrencyBRL(calc.amountPaid)}). Multa rescisória de 50% não devida.`}
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-mono">
                         {formatCurrencyBRL(calc.amountPaid)}
                       </TableCell>
                       <TableCell className="text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
-                        1,00%
+                        {calc.isWithinGracePeriod ? '0,00%' : `${calc.delayMonths} × 1,0%`}
                       </TableCell>
                       <TableCell className="text-right font-mono font-bold text-blue-700 dark:text-blue-400 print:text-slate-900 pr-6 text-sm">
                         {formatCurrencyBRL(calc.onePercentAmountPaid)}
@@ -515,6 +547,38 @@ export default function ClientPresentation() {
                     </TableRow>
                   )}
 
+                  {/* Rubrica Opcional: Correção Monetária / Juros */}
+                  {calc.correctionEnabled && (
+                    <TableRow className="bg-indigo-50/30 dark:bg-indigo-950/20">
+                      <TableCell className="text-center font-mono font-bold text-indigo-700 dark:text-indigo-400">
+                        02
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-bold text-slate-900 dark:text-white print:text-slate-900">
+                          Correção monetária e juros moratórios (
+                          {CORRECTION_INDEX_LABELS[calc.correctionIndex]?.label})
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Estimativa de {formatPercentBRL(calc.correctionRate, 1)} ao mês pelo
+                          período de {calc.correctionMonths} meses decorridos entre{' '}
+                          {formatDateBRL(calc.correctionStartDate)} e{' '}
+                          {formatDateBRL(calc.referenceDate)} sobre a rubrica devida.
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-slate-700 dark:text-slate-300">
+                        {formatCurrencyBRL(
+                          isDelayOption ? calc.onePercentAmountPaid : calc.fineFiftyPercent,
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
+                        {formatPercentBRL(calc.correctionRate * calc.correctionMonths, 1)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-indigo-700 dark:text-indigo-400 print:text-slate-900 pr-6 text-sm">
+                        {formatCurrencyBRL(calc.monetaryCorrectionAmount)}
+                      </TableCell>
+                    </TableRow>
+                  )}
+
                   {/* LINHA DE TOTALIZAÇÃO ESTIMADA A RECEBER */}
                   <TableRow className="bg-amber-100/70 dark:bg-amber-950/40 border-t-2 border-amber-500/50 print:bg-slate-200 print:border-slate-900">
                     <TableCell className="text-center font-mono font-black text-amber-900 dark:text-amber-200">
@@ -525,7 +589,7 @@ export default function ClientPresentation() {
                       className="font-bold text-slate-950 dark:text-white print:text-slate-900 text-sm uppercase"
                     >
                       {isDelayOption
-                        ? 'TOTAL ESTIMADO A RECEBER PELO CLIENTE (1% DO VALOR PAGO)'
+                        ? 'TOTAL ESTIMADO A RECEBER PELO CLIENTE (1% AO MÊS DE ATRASO)'
                         : 'TOTAL ESTIMADO A RECEBER PELO CLIENTE (MULTA DE 50% SOBRE VALOR PAGO)'}
                     </TableCell>
                     <TableCell className="text-right font-mono font-black text-slate-950 dark:text-amber-200 print:text-slate-900 text-base pr-6">
@@ -533,7 +597,7 @@ export default function ClientPresentation() {
                     </TableCell>
                   </TableRow>
 
-                  {/* Custas judiciais = 3% sobre a base aplicável - Despesa Isolada */}
+                  {/* Custas judiciais com alíquota ajustável - Despesa Isolada */}
                   <TableRow className="bg-slate-50/80 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-700">
                     <TableCell className="text-center font-mono font-semibold text-slate-500">
                       *
@@ -544,15 +608,15 @@ export default function ClientPresentation() {
                       </div>
                       <div className="text-[11px] text-muted-foreground">
                         {isDelayOption
-                          ? `Estimativa de 3,00% sobre o valor efetivamente pago (${formatCurrencyBRL(calc.amountPaid)}), haja vista que a multa de 50% não é devida. Não compõe o montante a receber.`
-                          : `Estimativa de 3,00% sobre a soma do valor efetivamente pago e a multa de 50% (${formatCurrencyBRL(calc.judicialCostsBase)}). Não compõe o montante a receber.`}
+                          ? `Estimativa de ${formatPercentBRL(calc.custasRate, 1)} sobre o valor efetivamente pago (${formatCurrencyBRL(calc.amountPaid)}), haja vista que a multa de 50% não é devida. Não compõe o montante a receber.`
+                          : `Estimativa de ${formatPercentBRL(calc.custasRate, 1)} sobre a soma do valor efetivamente pago e a multa de 50% (${formatCurrencyBRL(calc.judicialCostsBase)}). Não compõe o montante a receber.`}
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono text-slate-600 dark:text-slate-400">
                       {formatCurrencyBRL(calc.judicialCostsBase)}
                     </TableCell>
                     <TableCell className="text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
-                      3,00%
+                      {formatPercentBRL(calc.custasRate, 1)}
                     </TableCell>
                     <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-200 print:text-slate-900 pr-6 text-sm">
                       {formatCurrencyBRL(calc.judicialCosts)}
@@ -570,13 +634,21 @@ export default function ClientPresentation() {
                 <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-200 print:text-slate-900 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-emerald-600" />
                   {isDelayOption
-                    ? 'Expectativa Global de Crédito ao Cliente (Valor Pago + 1% Atraso)'
-                    : 'Expectativa Total de Crédito / Devolução ao Cliente (Restituição + Indenização)'}
+                    ? 'Expectativa Global de Crédito ao Cliente (Valor Pago + 1% ao mês + Correção)'
+                    : 'Expectativa Total de Crédito / Devolução ao Cliente (Restituição + Indenização + Correção)'}
                 </h3>
                 <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80 print:text-slate-600 mt-0.5">
                   {isDelayOption
-                    ? `Valor quitado (${formatCurrencyBRL(calc.amountPaid)}) acrescido da indenização de 1% (${formatCurrencyBRL(calc.onePercentAmountPaid)}) pelo atraso na entrega da obra.`
-                    : `Devolução integral do valor quitado (${formatCurrencyBRL(calc.amountPaid)}) acrescido do crédito indenizatório de 50% (${formatCurrencyBRL(calc.fineFiftyPercent)}) devido pela construtora ao cliente.`}
+                    ? `Valor quitado (${formatCurrencyBRL(calc.amountPaid)}) acrescido da indenização de 1% ao mês (${formatCurrencyBRL(calc.onePercentAmountPaid)})${
+                        calc.correctionEnabled
+                          ? ` e atualização monetária (${formatCurrencyBRL(calc.monetaryCorrectionAmount)})`
+                          : ''
+                      } pelo atraso na entrega da obra.`
+                    : `Devolução integral do valor quitado (${formatCurrencyBRL(calc.amountPaid)}) acrescido do crédito indenizatório de 50% (${formatCurrencyBRL(calc.fineFiftyPercent)})${
+                        calc.correctionEnabled
+                          ? ` e atualização monetária (${formatCurrencyBRL(calc.monetaryCorrectionAmount)})`
+                          : ''
+                      } devido pela construtora ao cliente.`}
                 </p>
               </div>
               <div className="text-left sm:text-right">
@@ -632,12 +704,13 @@ export default function ClientPresentation() {
             </div>
           </div>
 
-          {/* Disclaimer Jurídico no Rodapé do Documento */}
+          {/* Disclaimer Jurídico no Rodapé do Documento com Data de Referência */}
           <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mt-6 text-[10px] text-slate-500 dark:text-slate-400 text-center leading-normal print:border-slate-400">
             <span className="font-semibold">Ressalva Legal: </span>
-            Valores estimados para apresentação inicial — a base de cálculo definitiva será apurada
-            na data do ajuizamento da ação com a incidência de correção monetária
-            (INPC/IGP-M/IPCA-E) e juros legais de mora de 1% ao mês.
+            Valores apurados com data de referência fixada em{' '}
+            <strong>{formatDateBRL(simulation.reference_date || calc.referenceDate)}</strong> para
+            apresentação comercial e parecer preliminar. A apuração definitiva será liquidada no
+            ajuizamento da ação com a incidência de atualização monetária oficial e juros de mora.
           </div>
         </div>
       </div>

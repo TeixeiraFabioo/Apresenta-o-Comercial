@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-20T21:00:48.428Z",
+  "generatedAt": "2026-10-20T21:01:55.493Z",
   "collections": [
     {
       "name": "users",
@@ -29,19 +29,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -145,29 +140,58 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "simulation_type",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "rescisao_contratual",
-            "indenizacao_atraso"
-          ]
+          "selectValues": ["rescisao_contratual", "indenizacao_atraso"]
+        },
+        {
+          "name": "reference_date",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "custas_rate",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "correction_enabled",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "correction_index",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["inpc", "igpm", "ipca_e"]
+        },
+        {
+          "name": "correction_rate",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "correction_start_date",
+          "type": "date",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [

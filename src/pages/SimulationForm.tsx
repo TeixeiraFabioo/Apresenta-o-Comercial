@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { createSimulation, getSimulationById, updateSimulation } from '@/services/simulacoes'
-import { SimulationFormData, SimulationStatus, SimulationType } from '@/types/simulation'
+import {
+  CorrectionIndex,
+  SimulationFormData,
+  SimulationStatus,
+  SimulationType,
+} from '@/types/simulation'
 import {
   calculateLegalCosts,
+  CORRECTION_INDEX_LABELS,
   formatCurrencyBRL,
+  formatDateBRL,
   formatPercentBRL,
   getDeliveryDelayStatus,
+  getNormalizedDateString,
   SIMULATION_TYPE_CONFIG,
 } from '@/lib/calculations'
 import { CurrencyInput } from '@/components/CurrencyInput'
@@ -16,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -49,6 +58,7 @@ import {
   Receipt,
   Scale,
   Landmark,
+  TrendingUp,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -56,7 +66,7 @@ export default function SimulationForm() {
   const { id } = useParams<{ id: string }>()
   const isEditing = Boolean(id)
   const navigate = useNavigate()
-  const { user, isAuthenticated } = useAuth()
+  const { user } = useAuth()
   const { toast } = useToast()
 
   const [loading, setLoading] = useState(false)
@@ -70,13 +80,22 @@ export default function SimulationForm() {
   const [propertyValueRaw, setPropertyValueRaw] = useState<number>(480000)
   const [amountPaidRaw, setAmountPaidRaw] = useState<number>(240000)
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<string>(
-    new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    new Date(Date.now() - 425 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
   )
   const [contractNumber, setContractNumber] = useState('')
   const [developerName, setDeveloperName] = useState('')
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState<SimulationStatus>('apresentado')
   const [simulationType, setSimulationType] = useState<SimulationType>('rescisao_contratual')
+
+  // Novos campos: Data de referência, alíquota de custas, correção monetária
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
+  const [referenceDate, setReferenceDate] = useState<string>(todayStr)
+  const [custasRate, setCustasRate] = useState<number>(3)
+  const [correctionEnabled, setCorrectionEnabled] = useState<boolean>(false)
+  const [correctionIndex, setCorrectionIndex] = useState<CorrectionIndex>('inpc')
+  const [correctionRate, setCorrectionRate] = useState<number>(1)
+  const [correctionStartDate, setCorrectionStartDate] = useState<string>('')
 
   // Carregar dados existentes no caso de edição
   useEffect(() => {
@@ -95,6 +114,26 @@ export default function SimulationForm() {
             const dateOnly = record.expected_delivery_date.split('T')[0].split(' ')[0]
             setExpectedDeliveryDate(dateOnly)
           }
+
+          if (record.reference_date) {
+            const refOnly = record.reference_date.split('T')[0].split(' ')[0]
+            setReferenceDate(refOnly)
+          } else {
+            setReferenceDate(todayStr)
+          }
+
+          setCustasRate(typeof record.custas_rate === 'number' ? record.custas_rate : 3)
+          setCorrectionEnabled(Boolean(record.correction_enabled))
+          setCorrectionIndex(record.correction_index || 'inpc')
+          setCorrectionRate(typeof record.correction_rate === 'number' ? record.correction_rate : 1)
+
+          if (record.correction_start_date) {
+            const startOnly = record.correction_start_date.split('T')[0].split(' ')[0]
+            setCorrectionStartDate(startOnly)
+          } else if (record.expected_delivery_date) {
+            setCorrectionStartDate(record.expected_delivery_date.split('T')[0].split(' ')[0])
+          }
+
           setContractNumber(record.contract_number || '')
           setDeveloperName(record.developer_name || '')
           setNotes(record.notes || '')
@@ -127,15 +166,41 @@ export default function SimulationForm() {
     }
   }, [id, isEditing, user?.id, navigate, toast])
 
-  // Cálculos reativos em tempo real
-  const calcResults = useMemo(() => {
-    return calculateLegalCosts(propertyValueRaw, amountPaidRaw, simulationType)
-  }, [propertyValueRaw, amountPaidRaw, simulationType])
+  // Sincroniza sugestão da data de início da correção se ainda estiver vazia
+  useEffect(() => {
+    if (!correctionStartDate && expectedDeliveryDate) {
+      setCorrectionStartDate(expectedDeliveryDate)
+    }
+  }, [expectedDeliveryDate, correctionStartDate])
 
-  // Status de atraso contratual da obra
+  // Cálculos reativos em tempo real centralizados
+  const calcResults = useMemo(() => {
+    return calculateLegalCosts(propertyValueRaw, amountPaidRaw, simulationType, {
+      expectedDeliveryDate,
+      referenceDate,
+      custasRate,
+      correctionEnabled,
+      correctionIndex,
+      correctionRate,
+      correctionStartDate: correctionStartDate || expectedDeliveryDate,
+    })
+  }, [
+    propertyValueRaw,
+    amountPaidRaw,
+    simulationType,
+    expectedDeliveryDate,
+    referenceDate,
+    custasRate,
+    correctionEnabled,
+    correctionIndex,
+    correctionRate,
+    correctionStartDate,
+  ])
+
+  // Status de atraso contratual da obra com data de referência
   const delayInfo = useMemo(() => {
-    return getDeliveryDelayStatus(expectedDeliveryDate)
-  }, [expectedDeliveryDate])
+    return getDeliveryDelayStatus(expectedDeliveryDate, referenceDate)
+  }, [expectedDeliveryDate, referenceDate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -194,6 +259,15 @@ export default function SimulationForm() {
       notes: notes.trim() || undefined,
       status,
       simulation_type: simulationType,
+      reference_date: referenceDate || undefined,
+      custas_rate: custasRate >= 0 ? custasRate : 3,
+      correction_enabled: correctionEnabled,
+      correction_index: correctionIndex,
+      correction_rate: correctionRate >= 0 ? correctionRate : 1,
+      correction_start_date:
+        correctionEnabled && (correctionStartDate || expectedDeliveryDate)
+          ? correctionStartDate || expectedDeliveryDate
+          : undefined,
     }
 
     try {
@@ -241,12 +315,20 @@ export default function SimulationForm() {
     setUnitDescription('Apartamento 184 - Torre A')
     setPropertyValueRaw(480000)
     setAmountPaidRaw(240000)
+    // 14 meses atrás para testar o cálculo de 1% × 14 meses
+    const d = new Date()
+    d.setMonth(d.getMonth() - 14)
+    const pastDate = d.toISOString().split('T')[0]
+    setExpectedDeliveryDate(pastDate)
+    setReferenceDate(todayStr)
+    setCustasRate(3)
+    setCorrectionEnabled(false)
     setContractNumber('CTR-8891/2022')
     setDeveloperName('Cyrela / Construtora Metropolitana SPE')
     setNotes(
-      'Atraso superior a 6 meses. Cliente busca rescisão contratual com devolução integral dos valores e aplicação da multa de 50%.',
+      'Atraso superior a 14 meses (carência de 180 dias superada).\nCliente solicita apuração detalhada de restituição e penalidades contratuais.',
     )
-    setSimulationType('rescisao_contratual')
+    setSimulationType('indenizacao_atraso')
     setStatus('apresentado')
   }
 
@@ -507,46 +589,224 @@ export default function SimulationForm() {
                 )}
               </div>
 
-              {/* Data Prevista de Entrega */}
+              {/* Datas de Prazos: Prevista de Entrega e Referência do Cálculo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Data Prevista de Entrega */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label
+                      htmlFor="expected_delivery_date"
+                      className="text-xs font-bold text-slate-800 dark:text-slate-200"
+                    >
+                      Data prevista de entrega (contrato) *
+                    </Label>
+                  </div>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      id="expected_delivery_date"
+                      type="date"
+                      required
+                      value={expectedDeliveryDate}
+                      onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+                      className="pl-9 h-11 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Data de Referência do Cálculo */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label
+                      htmlFor="reference_date"
+                      className="text-xs font-bold text-slate-800 dark:text-slate-200"
+                    >
+                      Data de referência do cálculo *
+                    </Label>
+                    <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+                      Fixa o atraso
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      id="reference_date"
+                      type="date"
+                      required
+                      value={referenceDate}
+                      onChange={(e) => setReferenceDate(e.target.value)}
+                      className="pl-9 h-11 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Alíquota de Custas Judiciais Ajustável (%) */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label
-                    htmlFor="expected_delivery_date"
+                    htmlFor="custas_rate"
                     className="text-xs font-bold text-slate-800 dark:text-slate-200"
                   >
-                    Data prevista de entrega das chaves no contrato *
+                    Alíquota de custas judiciais (%) *
                   </Label>
-                  <span className="text-[11px] text-muted-foreground">Cláusula de prazo</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Padrão: 3,0% (despesa processual isolada)
+                  </span>
                 </div>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <Percent className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
-                    id="expected_delivery_date"
-                    type="date"
+                    id="custas_rate"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
                     required
-                    value={expectedDeliveryDate}
-                    onChange={(e) => setExpectedDeliveryDate(e.target.value)}
-                    className="pl-9 h-11"
+                    value={custasRate}
+                    onChange={(e) => setCustasRate(parseFloat(e.target.value) || 0)}
+                    className="pl-9 h-11 font-mono text-sm border-slate-300 dark:border-slate-700"
                   />
                 </div>
-                {expectedDeliveryDate && (
+                <p className="text-[11px] text-muted-foreground">
+                  Percentual estimado das taxas e custas do Tribunal de Justiça competente (editável
+                  por processo/estado).
+                </p>
+              </div>
+
+              {/* Status do Atraso / Carência de 180 dias */}
+              {expectedDeliveryDate && (
+                <div className="space-y-2">
                   <div
-                    className={`mt-1.5 p-2.5 rounded-lg text-xs flex items-center gap-2 border ${
+                    className={`p-3 rounded-lg text-xs flex items-start gap-2.5 border ${
                       delayInfo.isDelayed
-                        ? 'bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                        ? delayInfo.isWithinGracePeriod
+                          ? 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700'
+                          : 'bg-blue-50 text-blue-900 border-blue-200 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-800'
                         : 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800'
                     }`}
                   >
                     {delayInfo.isDelayed ? (
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     ) : (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     )}
-                    <span className="font-medium">{delayInfo.text}</span>
+                    <div className="space-y-1">
+                      <div className="font-semibold">{delayInfo.text}</div>
+                      {simulationType === 'indenizacao_atraso' && delayInfo.isWithinGracePeriod && (
+                        <div className="text-[11px] text-amber-800 dark:text-amber-300 leading-snug">
+                          {delayInfo.graceWarningText}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </CardContent>
+          </Card>
+
+          {/* Card Opcional: Correção Monetária e Juros */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+            <CardHeader className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 flex items-center justify-center font-bold">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
+                    Correção Monetária e Juros de Mora (Opcional)
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Estimativa de atualização do valor devido até a data de ajuizamento.
+                  </CardDescription>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Label
+                  htmlFor="correction_enabled_switch"
+                  className="text-xs font-semibold cursor-pointer text-slate-700 dark:text-slate-300"
+                >
+                  {correctionEnabled ? 'Ativada' : 'Desativada'}
+                </Label>
+                <Switch
+                  id="correction_enabled_switch"
+                  checked={correctionEnabled}
+                  onCheckedChange={setCorrectionEnabled}
+                />
+              </div>
+            </CardHeader>
+
+            {correctionEnabled && (
+              <CardContent className="p-5 space-y-4 animate-fade-in bg-indigo-50/20 dark:bg-indigo-950/10">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Índice */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="correction_index" className="text-xs font-semibold">
+                      Índice Econômico
+                    </Label>
+                    <Select
+                      value={correctionIndex}
+                      onValueChange={(val) => setCorrectionIndex(val as CorrectionIndex)}
+                    >
+                      <SelectTrigger id="correction_index" className="h-10 text-xs">
+                        <SelectValue placeholder="Selecione o índice" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="inpc">INPC (IBGE)</SelectItem>
+                        <SelectItem value="igpm">IGP-M (FGV)</SelectItem>
+                        <SelectItem value="ipca_e">IPCA-E (IBGE)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Taxa Mensal (%) */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="correction_rate" className="text-xs font-semibold">
+                      Taxa Mensal Estimada (%)
+                    </Label>
+                    <Input
+                      id="correction_rate"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={correctionRate}
+                      onChange={(e) => setCorrectionRate(parseFloat(e.target.value) || 0)}
+                      className="h-10 text-xs font-mono"
+                    />
+                  </div>
+
+                  {/* Data Inicial */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="correction_start_date" className="text-xs font-semibold">
+                      Data Inicial da Correção
+                    </Label>
+                    <Input
+                      id="correction_start_date"
+                      type="date"
+                      value={correctionStartDate}
+                      onChange={(e) => setCorrectionStartDate(e.target.value)}
+                      className="h-10 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-[11px] text-indigo-950 dark:text-indigo-200 space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    <span>Critério de Atualização adotado:</span>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Fórmula: Valor Devido × ({correctionRate}% ao mês) ×{' '}
+                    {calcResults.correctionMonths} meses decorridos entre a data inicial (
+                    {formatDateBRL(correctionStartDate || expectedDeliveryDate)}) e a data de
+                    referência ({formatDateBRL(referenceDate)}). Estimativa simples — a correção
+                    definitiva será apurada na data do ajuizamento com os índices oficiais.
+                  </p>
+                </div>
+              </CardContent>
+            )}
           </Card>
 
           {/* Card 2: Identificação do Cliente e do Imóvel */}
@@ -654,7 +914,7 @@ export default function SimulationForm() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div className="grid grid-cols-1 gap-4 pt-1">
                 <div className="space-y-1.5">
                   <Label htmlFor="status" className="text-xs font-semibold">
                     Status da Negociação
@@ -676,17 +936,23 @@ export default function SimulationForm() {
                   </Select>
                 </div>
 
-                <div className="space-y-1.5 sm:col-span-1">
+                {/* Observações Multilinha (Textarea de várias linhas) */}
+                <div className="space-y-1.5">
                   <Label htmlFor="notes" className="text-xs font-semibold">
-                    Observações Internas do Caso
+                    Observações e Fundamentações do Caso
                   </Label>
-                  <Input
+                  <Textarea
                     id="notes"
-                    placeholder="Ex: Carência ultrapassada, cliente busca rescisão total..."
+                    rows={4}
+                    placeholder="Ex.: Detalhamento do atraso na entrega, comunicação formal com a construtora, cláusulas abusivas ou particularidades da negociação..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="h-10 text-xs"
+                    className="text-xs resize-y min-h-[96px] leading-relaxed"
                   />
+                  <p className="text-[11px] text-muted-foreground">
+                    As quebras de linha e parágrafos serão exibidos integralmente na apresentação
+                    impressa do cliente.
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -762,24 +1028,45 @@ export default function SimulationForm() {
                 </Badge>
               </div>
 
+              {/* Aviso em destaque se dentro do período de carência de 180 dias na modalidade de atraso */}
+              {simulationType === 'indenizacao_atraso' && calcResults.isWithinGracePeriod && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border-2 border-amber-500/40 text-amber-900 dark:text-amber-300 space-y-1.5 animate-fade-in">
+                  <div className="flex items-center gap-2 font-bold text-xs">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Carência de 180 dias não superada</span>
+                  </div>
+                  <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed">
+                    O atraso apurado na data de referência ({calcResults.delayDays} dias) ainda está
+                    dentro da tolerância contratual/legal de 180 dias. Faltam{' '}
+                    <strong className="text-amber-700 dark:text-amber-400">
+                      {calcResults.daysToGraceEnd} dias
+                    </strong>{' '}
+                    para que a indenização por atraso de 1% ao mês passe a ser devida.
+                  </p>
+                </div>
+              )}
+
               {/* Exibição condicional da rubrica aplicável conforme a escolha */}
               {simulationType === 'indenizacao_atraso' ? (
-                /* Item 1: 1% do valor efetivamente pago (Indenização por Atraso) */
+                /* Item 1: 1% ao mês de atraso sobre o valor efetivamente pago */
                 <div className="p-3.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/80 space-y-1 transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                       <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">
                         1
                       </span>
-                      1% do valor efetivamente pago (Atraso)
+                      1% ao mês de atraso ({calcResults.delayMonths}{' '}
+                      {calcResults.delayMonths === 1 ? 'mês' : 'meses'})
                     </span>
                     <span className="text-[11px] font-mono text-muted-foreground">
-                      {formatCurrencyBRL(calcResults.amountPaid)} × 1%
+                      1% × {calcResults.delayMonths} m × {formatCurrencyBRL(calcResults.amountPaid)}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between pt-1">
                     <span className="text-[11px] text-muted-foreground">
-                      Indenização mensal pelo atraso na entrega
+                      {calcResults.isWithinGracePeriod
+                        ? 'Indenização suspensa (dentro da carência)'
+                        : `Indenização acumulada (${calcResults.delayMonths} meses de atraso)`}
                     </span>
                     <span className="text-base font-bold font-mono text-blue-700 dark:text-blue-300">
                       {formatCurrencyBRL(calcResults.onePercentAmountPaid)}
@@ -787,7 +1074,7 @@ export default function SimulationForm() {
                   </div>
                 </div>
               ) : (
-                /* Item 2: Multa de 50% sobre o valor efetivamente pago (Rescisão Contratual) */
+                /* Item 1: Multa de 50% sobre o valor efetivamente pago (Rescisão Contratual) */
                 <div className="p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 space-y-1 transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
@@ -811,17 +1098,44 @@ export default function SimulationForm() {
                 </div>
               )}
 
-              {/* Item Custas Judiciais (3%) - Calculada conforme regra da modalidade */}
+              {/* Rubrica Opcional: Correção Monetária / Juros de Mora */}
+              {calcResults.correctionEnabled && (
+                <div className="p-3.5 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 space-y-1 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold">
+                        +
+                      </span>
+                      Correção monetária / juros (
+                      {CORRECTION_INDEX_LABELS[calcResults.correctionIndex]?.label})
+                    </span>
+                    <span className="text-[11px] font-mono text-muted-foreground">
+                      {calcResults.correctionRate}% a.m. × {calcResults.correctionMonths} m
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      Atualização estimada até a data de referência
+                    </span>
+                    <span className="text-base font-bold font-mono text-indigo-700 dark:text-indigo-300">
+                      {formatCurrencyBRL(calcResults.monetaryCorrectionAmount)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Item Custas Judiciais Ajustáveis - Despesa Isolada */}
               <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1 transition-all">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                     <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 flex items-center justify-center text-[10px] font-bold">
-                      2
+                      *
                     </span>
-                    Custas judiciais (3%)
+                    Custas judiciais ({formatPercentBRL(calcResults.custasRate, 1)})
                   </span>
                   <span className="text-[11px] font-mono text-muted-foreground">
-                    3% × {formatCurrencyBRL(calcResults.judicialCostsBase)}
+                    {formatPercentBRL(calcResults.custasRate, 1)} ×{' '}
+                    {formatCurrencyBRL(calcResults.judicialCostsBase)}
                   </span>
                 </div>
                 <div className="flex items-baseline justify-between pt-1">
@@ -856,7 +1170,7 @@ export default function SimulationForm() {
                   >
                     {simulationType === 'rescisao_contratual'
                       ? 'Multa 50% (Rescisão)'
-                      : '1% Pago (Atraso)'}
+                      : '1% ao mês (Atraso)'}
                   </Badge>
                 </div>
                 <div className="flex items-baseline justify-between pt-2">
@@ -870,18 +1184,23 @@ export default function SimulationForm() {
                 <p className="text-[10px] text-amber-800/80 dark:text-amber-400/80 pt-1">
                   {simulationType === 'rescisao_contratual' ? (
                     <>
-                      = Apenas a multa de 50% ({formatCurrencyBRL(calcResults.fineFiftyPercent)}) •
-                      O 1% por atraso não é aplicável.
+                      = Multa de 50% ({formatCurrencyBRL(calcResults.fineFiftyPercent)})
+                      {calcResults.correctionEnabled && (
+                        <> + Correção ({formatCurrencyBRL(calcResults.monetaryCorrectionAmount)})</>
+                      )}{' '}
+                      • O 1% por atraso não é aplicável.
                     </>
                   ) : (
                     <>
-                      = Apenas o 1% do valor pago (
-                      {formatCurrencyBRL(calcResults.onePercentAmountPaid)}) • A multa de 50% não é
-                      devida.
+                      = 1% ao mês ({formatCurrencyBRL(calcResults.onePercentAmountPaid)})
+                      {calcResults.correctionEnabled && (
+                        <> + Correção ({formatCurrencyBRL(calcResults.monetaryCorrectionAmount)})</>
+                      )}{' '}
+                      • A multa de 50% não é devida.
                     </>
                   )}{' '}
-                  Custas judiciais ({formatCurrencyBRL(calcResults.judicialCosts)}) constituem
-                  despesa isolada.
+                  Custas judiciais de {formatPercentBRL(calcResults.custasRate, 1)} (
+                  {formatCurrencyBRL(calcResults.judicialCosts)}) constituem despesa isolada.
                 </p>
               </div>
 
@@ -891,8 +1210,8 @@ export default function SimulationForm() {
                   <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
                     {simulationType === 'rescisao_contratual'
-                      ? 'Potencial de Restituição (100% Pago + Multa 50%)'
-                      : 'Expectativa Global (Valor Pago + 1% Atraso)'}
+                      ? 'Potencial de Restituição (100% Pago + Multa 50% + Correção)'
+                      : 'Expectativa Global (Valor Pago + 1% ao mês + Correção)'}
                   </span>
                   <span className="text-xs font-bold font-mono text-emerald-700 dark:text-emerald-300">
                     {formatCurrencyBRL(calcResults.potentialRecoveryTotal)}
@@ -900,8 +1219,16 @@ export default function SimulationForm() {
                 </div>
                 <p className="text-[10px] text-emerald-800/80 dark:text-emerald-400 mt-1">
                   {simulationType === 'rescisao_contratual'
-                    ? `100% do valor pago (${formatCurrencyBRL(calcResults.amountPaid)}) + 50% de multa (${formatCurrencyBRL(calcResults.fineFiftyPercent)}).`
-                    : `Valor pago (${formatCurrencyBRL(calcResults.amountPaid)}) + indenização de 1% (${formatCurrencyBRL(calcResults.onePercentAmountPaid)}).`}
+                    ? `100% do valor pago (${formatCurrencyBRL(calcResults.amountPaid)}) + 50% de multa (${formatCurrencyBRL(calcResults.fineFiftyPercent)})${
+                        calcResults.correctionEnabled
+                          ? ` + correção (${formatCurrencyBRL(calcResults.monetaryCorrectionAmount)})`
+                          : ''
+                      }.`
+                    : `Valor pago (${formatCurrencyBRL(calcResults.amountPaid)}) + indenização de 1% ao mês (${formatCurrencyBRL(calcResults.onePercentAmountPaid)})${
+                        calcResults.correctionEnabled
+                          ? ` + correção (${formatCurrencyBRL(calcResults.monetaryCorrectionAmount)})`
+                          : ''
+                      }.`}
                 </p>
               </div>
             </CardContent>

@@ -1,79 +1,219 @@
-import { CalculationBreakdown, SimulationType } from '@/types/simulation'
+import {
+  CalculationBreakdown,
+  CalculationOptions,
+  CorrectionIndex,
+  SimulationType,
+} from '@/types/simulation'
+
+export const CORRECTION_INDEX_LABELS: Record<CorrectionIndex, { label: string; fullName: string }> =
+  {
+    inpc: { label: 'INPC', fullName: 'Índice Nacional de Preços ao Consumidor (IBGE)' },
+    igpm: { label: 'IGP-M', fullName: 'Índice Geral de Preços do Mercado (FGV)' },
+    ipca_e: {
+      label: 'IPCA-E',
+      fullName: 'Índice Nacional de Preços ao Consumidor Amplo Especial (IBGE)',
+    },
+  }
 
 /**
  * Realiza a computação centralizada e unificada dos cálculos judiciais do contrato imobiliário:
  *
- * Regra de negócio: "Se aplicável 1% pelo atraso, a multa de 50% não é devida."
- *
- * - "indenizacao_atraso" (Indenização por Atraso):
- *    • Aplica o cálculo de 1% do valor efetivamente pago e NÃO aplica a multa de 50% (0).
- *    • Total a receber pelo cliente = apenas o 1% do valor efetivamente pago.
- *    • Custas judiciais = 3% sobre o valor efetivamente pago (já que a multa não é devida).
- *    • Potencial de recuperação = valor efetivamente pago + 1% por atraso.
- *
- * - "rescisao_contratual" (Rescisão Contratual):
- *    • Aplica a multa de 50% sobre o valor efetivamente pago e NÃO aplica o 1% por atraso (0).
- *    • Total a receber pelo cliente = apenas a multa de 50% sobre o valor efetivamente pago.
- *    • Custas judiciais = 3% sobre (valor efetivamente pago + multa de 50%).
- *    • Potencial de recuperação = restituição integral (100% pago) + multa de 50%.
- *
- * * Em ambos os casos, as custas judiciais continuam sendo uma despesa isolada que NÃO entra
- *   no "TOTAL ESTIMADO A RECEBER PELO CLIENTE".
+ * Regras de negócio:
+ * 1. "Se aplicável 1% pelo atraso, a multa de 50% não é devida" (e vice-versa).
+ * 2. 1% AO MÊS REAL:
+ *    • Valor = 1% × quantidade de meses de atraso × valor efetivamente pago.
+ *    • Meses de atraso apurados entre a data prevista de entrega e a data de referência.
+ * 3. CARÊNCIA DE 180 DIAS:
+ *    • Atrasos inferiores a 180 dias ainda não geram direito ao 1% por atraso (valor = 0).
+ *    • Flag indicando carência ativa e dias restantes.
+ * 4. DATA DE REFERÊNCIA:
+ *    • Atraso e correção calculados contra data de referência fixa (ou hoje se não informada).
+ * 5. CUSTAS JUDICIAIS AJUSTÁVEIS:
+ *    • Alíquota configurável (padrão 3%).
+ *    • Despesa processual isolada que NÃO compõe o total a receber pelo cliente.
+ * 6. CORREÇÃO MONETÁRIA / JUROS (opcional):
+ *    • Quando ativa, calcula (taxa mensal × meses decorridos × base da rubrica principal)
+ *      ou juros simples mensais estimados entre data inicial e data de referência.
+ *    • Entra no total estimado a receber pelo cliente.
  */
 export function calculateLegalCosts(
   propertyValueInput: number | string | undefined | null,
   amountPaidInput: number | string | undefined | null,
   simulationType: SimulationType = 'rescisao_contratual',
+  options?: CalculationOptions,
 ): CalculationBreakdown {
   const propertyValue = sanitizeNumber(propertyValueInput)
   const amountPaid = sanitizeNumber(amountPaidInput)
   const type: SimulationType =
     simulationType === 'indenizacao_atraso' ? 'indenizacao_atraso' : 'rescisao_contratual'
 
-  const rawOnePercent = roundToTwoDecimals(amountPaid * 0.01)
-  const rawFiftyPercent = roundToTwoDecimals(amountPaid * 0.5)
+  // Alíquota de custas (padrão 3%)
+  const parsedCustasRate =
+    options?.custasRate !== undefined && options?.custasRate !== null
+      ? sanitizeNumber(options.custasRate)
+      : 3
+  const custasRate = parsedCustasRate >= 0 ? parsedCustasRate : 3
 
+  // Datas e atraso
+  const delayInfo = getDeliveryDelayStatus(options?.expectedDeliveryDate, options?.referenceDate)
+
+  const delayMonths = delayInfo.monthsDiff > 0 ? delayInfo.monthsDiff : 0
+  const delayDays = delayInfo.daysDiff > 0 ? delayInfo.daysDiff : 0
+  const isWithinGracePeriod = delayInfo.isWithinGracePeriod
+  const daysToGraceEnd = delayInfo.daysToGraceEnd
+
+  // 1% ao mês REAL sobre valor efetivamente pago
+  // Aplica apenas se modalidade for 'indenizacao_atraso' E carência de 180 dias tiver sido superada
   let onePercentAmountPaid = 0
   let fineFiftyPercent = 0
   let judicialCostsBase = 0
-  let estimatedTotal = 0
-  let potentialRecoveryTotal = 0
 
   if (type === 'indenizacao_atraso') {
-    // Indenização por Atraso: 1% aplicável, multa 50% NÃO devida
-    onePercentAmountPaid = rawOnePercent
+    if (!isWithinGracePeriod && delayMonths > 0) {
+      onePercentAmountPaid = roundToTwoDecimals(amountPaid * 0.01 * delayMonths)
+    } else {
+      onePercentAmountPaid = 0
+    }
     fineFiftyPercent = 0
-    // Custas incidem apenas sobre o valor efetivamente pago
     judicialCostsBase = amountPaid
-    // Total a receber: apenas o 1% do valor efetivamente pago
-    estimatedTotal = onePercentAmountPaid
-    potentialRecoveryTotal = roundToTwoDecimals(amountPaid + onePercentAmountPaid)
   } else {
-    // Rescisão Contratual: multa 50% aplicável, 1% por atraso NÃO aplicável
+    // Rescisão: multa de 50% sobre valor pago, 1% por atraso = 0
     onePercentAmountPaid = 0
-    fineFiftyPercent = rawFiftyPercent
-    // Custas incidem sobre (valor pago + multa de 50%)
+    fineFiftyPercent = roundToTwoDecimals(amountPaid * 0.5)
     judicialCostsBase = roundToTwoDecimals(amountPaid + fineFiftyPercent)
-    // Total a receber: apenas a multa de 50% sobre o valor efetivamente pago
-    estimatedTotal = fineFiftyPercent
-    potentialRecoveryTotal = roundToTwoDecimals(amountPaid + fineFiftyPercent)
   }
 
-  const judicialCosts = roundToTwoDecimals(judicialCostsBase * 0.03)
+  // Base principal que serve de referência para o cliente (antes da correção monetária)
+  const principalDue = type === 'indenizacao_atraso' ? onePercentAmountPaid : fineFiftyPercent
+
+  // Correção Monetária / Juros Opcional
+  const correctionEnabled = Boolean(options?.correctionEnabled)
+  const rawIndex = options?.correctionIndex
+  const correctionIndex: CorrectionIndex =
+    rawIndex === 'igpm' || rawIndex === 'ipca_e' ? rawIndex : 'inpc'
+  const parsedCorrectionRate =
+    options?.correctionRate !== undefined && options?.correctionRate !== null
+      ? sanitizeNumber(options.correctionRate)
+      : 1
+  const correctionRate = parsedCorrectionRate >= 0 ? parsedCorrectionRate : 1
+
+  // Data inicial da correção monetária (se não informada, usa data prevista de entrega)
+  const correctionStartDate =
+    options?.correctionStartDate || options?.expectedDeliveryDate || undefined
+
+  let correctionMonths = 0
+  let monetaryCorrectionAmount = 0
+
+  if (correctionEnabled && principalDue > 0) {
+    correctionMonths = computeMonthsBetween(correctionStartDate, options?.referenceDate)
+    if (correctionMonths > 0) {
+      // Fórmula simples e transparente documentada:
+      // Juros simples mensais estimados = Valor Devido × (Taxa Mensal % / 100) × Meses Decorridos
+      const rateDecimal = correctionRate / 100
+      monetaryCorrectionAmount = roundToTwoDecimals(principalDue * rateDecimal * correctionMonths)
+    }
+  }
+
+  const judicialCosts = roundToTwoDecimals(judicialCostsBase * (custasRate / 100))
   const paidPercentage = propertyValue > 0 ? (amountPaid / propertyValue) * 100 : 0
+
+  // Total estimado a receber: rubrica devida + correção monetária (custas são despesa isolada)
+  const estimatedTotal = roundToTwoDecimals(principalDue + monetaryCorrectionAmount)
+
+  // Potencial de recuperação global estimado:
+  // Rescisão: valor pago + multa 50% + correção
+  // Atraso: valor pago + 1% atraso + correção
+  const potentialRecoveryTotal = roundToTwoDecimals(
+    amountPaid + principalDue + monetaryCorrectionAmount,
+  )
+
+  const referenceDateString =
+    getNormalizedDateString(options?.referenceDate) || new Date().toISOString()
 
   return {
     simulationType: type,
     propertyValue,
     amountPaid,
     paidPercentage,
+    delayMonths,
+    delayDays,
+    isWithinGracePeriod,
+    daysToGraceEnd,
     onePercentAmountPaid,
     fineFiftyPercent,
+    custasRate,
     judicialCostsBase,
     judicialCosts,
+    correctionEnabled,
+    correctionIndex,
+    correctionRate,
+    correctionMonths,
+    correctionStartDate: getNormalizedDateString(correctionStartDate),
+    referenceDate: referenceDateString,
+    monetaryCorrectionAmount,
     estimatedTotal,
     potentialRecoveryTotal,
   }
+}
+
+/**
+ * Converte Date ou string para YYYY-MM-DD normalizado
+ */
+export function getNormalizedDateString(dateVal?: string | Date | null): string {
+  if (!dateVal) return ''
+  try {
+    if (typeof dateVal === 'string') {
+      const trimmed = dateVal.trim()
+      if (trimmed.includes('T')) return trimmed.split('T')[0]
+      if (trimmed.includes(' ')) return trimmed.split(' ')[0]
+      return trimmed
+    }
+    const y = dateVal.getFullYear()
+    const m = String(dateVal.getMonth() + 1).padStart(2, '0')
+    const d = String(dateVal.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  } catch (_) {
+    return ''
+  }
+}
+
+/**
+ * Calcula quantidade inteira de meses decorridos entre duas datas
+ */
+export function computeMonthsBetween(
+  startDateStr?: string | Date | null,
+  endDateStr?: string | Date | null,
+): number {
+  if (!startDateStr) return 0
+  try {
+    const start = parseDateLocal(startDateStr)
+    const end = endDateStr ? parseDateLocal(endDateStr) : new Date()
+    if (!start || !end) return 0
+    start.setHours(0, 0, 0, 0)
+    end.setHours(0, 0, 0, 0)
+
+    const diffTime = end.getTime() - start.getTime()
+    if (diffTime <= 0) return 0
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    return Math.floor(diffDays / 30.4375)
+  } catch (_) {
+    return 0
+  }
+}
+
+function parseDateLocal(d: string | Date): Date | null {
+  if (d instanceof Date) return isNaN(d.getTime()) ? null : d
+  if (typeof d !== 'string') return null
+  const dateOnly = d.split('T')[0].split(' ')[0]
+  const parts = dateOnly.split('-')
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10)
+    const month = parseInt(parts[1], 10) - 1
+    const day = parseInt(parts[2], 10)
+    return new Date(year, month, day, 12, 0, 0)
+  }
+  const parsed = new Date(d)
+  return isNaN(parsed.getTime()) ? null : parsed
 }
 
 /**
@@ -159,57 +299,109 @@ export function formatDateBRL(dateStr: string | Date | undefined | null): string
 }
 
 /**
- * Retorna se a entrega já está em atraso com base na data prevista
+ * Retorna se a entrega já está em atraso com base na data prevista e na data de referência do cálculo.
+ * Trata o período de carência legal de 180 dias.
  */
-export function getDeliveryDelayStatus(expectedDateStr: string | undefined | null): {
+export function getDeliveryDelayStatus(
+  expectedDateStr: string | Date | undefined | null,
+  referenceDateStr?: string | Date | null,
+): {
   isDelayed: boolean
   daysDiff: number
   monthsDiff: number
+  isWithinGracePeriod: boolean
+  daysToGraceEnd: number
   text: string
+  graceWarningText?: string
 } {
   if (!expectedDateStr) {
-    return { isDelayed: false, daysDiff: 0, monthsDiff: 0, text: 'Data não informada' }
+    return {
+      isDelayed: false,
+      daysDiff: 0,
+      monthsDiff: 0,
+      isWithinGracePeriod: false,
+      daysToGraceEnd: 180,
+      text: 'Data prevista não informada',
+    }
   }
 
   try {
-    const expected = new Date(expectedDateStr)
-    const today = new Date()
-    // Normalizar horas
-    expected.setUTCHours(0, 0, 0, 0)
-    today.setUTCHours(0, 0, 0, 0)
+    const expected = parseDateLocal(expectedDateStr)
+    const ref = referenceDateStr ? parseDateLocal(referenceDateStr) : new Date()
 
-    const diffTime = today.getTime() - expected.getTime()
+    if (!expected || !ref) {
+      return {
+        isDelayed: false,
+        daysDiff: 0,
+        monthsDiff: 0,
+        isWithinGracePeriod: false,
+        daysToGraceEnd: 180,
+        text: 'Data inválida',
+      }
+    }
+
+    expected.setHours(0, 0, 0, 0)
+    ref.setHours(0, 0, 0, 0)
+
+    const diffTime = ref.getTime() - expected.getTime()
     const daysDiff = Math.floor(diffTime / (1000 * 60 * 60 * 24))
     const monthsDiff = Math.floor(daysDiff / 30.4375)
 
     if (daysDiff > 0) {
-      if (daysDiff > 180) {
+      if (daysDiff < 180) {
+        const daysRemaining = 180 - daysDiff
         return {
           isDelayed: true,
           daysDiff,
           monthsDiff,
-          text: `Atraso de ${daysDiff} dias (${monthsDiff} meses) — Ultrapassou a carência de 180 dias`,
+          isWithinGracePeriod: true,
+          daysToGraceEnd: daysRemaining,
+          text: `Atraso de ${daysDiff} dias (${monthsDiff} meses) — Dentro da carência de 180 dias`,
+          graceWarningText: `O atraso (${daysDiff} dias) ainda está dentro do período de carência de 180 dias (faltam ${daysRemaining} dias). A indenização por atraso ainda não é devida.`,
         }
       }
+
       return {
         isDelayed: true,
         daysDiff,
         monthsDiff,
-        text: `Atraso de ${daysDiff} dias (${monthsDiff} meses)`,
+        isWithinGracePeriod: false,
+        daysToGraceEnd: 0,
+        text: `Atraso de ${daysDiff} dias (${monthsDiff} meses) — Ultrapassou a carência de 180 dias`,
       }
     } else if (daysDiff === 0) {
-      return { isDelayed: false, daysDiff: 0, monthsDiff: 0, text: 'Prazo vence hoje' }
+      return {
+        isDelayed: false,
+        daysDiff: 0,
+        monthsDiff: 0,
+        isWithinGracePeriod: true,
+        daysToGraceEnd: 180,
+        text: 'Prazo vence na data de referência',
+        graceWarningText:
+          'O imóvel está no prazo contratual. A carência de 180 dias inicia a partir desta data.',
+      }
     } else {
       const remainingDays = Math.abs(daysDiff)
       return {
         isDelayed: false,
         daysDiff,
         monthsDiff,
-        text: `Dentro do prazo contratual (restam ${remainingDays} dias)`,
+        isWithinGracePeriod: true,
+        daysToGraceEnd: 180 + remainingDays,
+        text: `Dentro do prazo contratual (faltam ${remainingDays} dias para a entrega prevista)`,
+        graceWarningText:
+          'Contrato ainda vigente dentro do prazo estipulado. A indenização de 1% não é devida.',
       }
     }
   } catch (_) {
-    return { isDelayed: false, daysDiff: 0, monthsDiff: 0, text: 'Prazo contratual' }
+    return {
+      isDelayed: false,
+      daysDiff: 0,
+      monthsDiff: 0,
+      isWithinGracePeriod: false,
+      daysToGraceEnd: 180,
+      text: 'Prazo contratual',
+    }
   }
 }
 
@@ -247,10 +439,11 @@ export const SIMULATION_TYPE_CONFIG: Record<
     label: 'Indenização por Atraso',
     shortLabel: 'Indenização por Atraso',
     badgeLabel: 'Indenização por Atraso',
-    description: 'Aplica 1% ao mês sobre o valor efetivamente pago (multa de 50% não é devida).',
-    clientTotalExplanation: '1% do valor efetivamente pago',
+    description:
+      'Aplica 1% ao mês sobre o valor efetivamente pago (multa de 50% não é devida). Carência de 180 dias.',
+    clientTotalExplanation: '1% ao mês de atraso sobre o valor efetivamente pago',
     ruleExplanation:
-      'Na Indenização por Atraso, aplica-se a verba indenizatória de 1% do valor quitado. A multa rescisória de 50% não é devida.',
+      'Na Indenização por Atraso, aplica-se a verba de 1% ao mês de atraso sobre o valor quitado (após superada a carência de 180 dias). A multa de 50% não é devida.',
     colorClasses:
       'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-700',
   },

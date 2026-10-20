@@ -7,6 +7,7 @@ import {
   calculateLegalCosts,
   formatCurrencyBRL,
   formatDateBRL,
+  formatPercentBRL,
   STATUS_LABELS,
   SIMULATION_TYPE_CONFIG,
 } from '@/lib/calculations'
@@ -123,7 +124,15 @@ export default function Index() {
     let totalFines = 0
 
     simulations.forEach((sim) => {
-      const calc = calculateLegalCosts(sim.property_value, sim.amount_paid, sim.simulation_type)
+      const calc = calculateLegalCosts(sim.property_value, sim.amount_paid, sim.simulation_type, {
+        expectedDeliveryDate: sim.expected_delivery_date,
+        referenceDate: sim.reference_date,
+        custasRate: sim.custas_rate,
+        correctionEnabled: sim.correction_enabled,
+        correctionIndex: sim.correction_index,
+        correctionRate: sim.correction_rate,
+        correctionStartDate: sim.correction_start_date,
+      })
       totalPropertiesValue += calc.propertyValue
       totalPaidValue += calc.amountPaid
       totalEstimated += calc.estimatedTotal
@@ -409,9 +418,9 @@ export default function Index() {
                     <TableHead className="text-right text-xs font-semibold">Valor Pago</TableHead>
                     <TableHead
                       className="text-right text-xs font-semibold text-slate-700 dark:text-slate-300 font-mono"
-                      title="Custas judiciais (3%) — Despesa isolada"
+                      title="Custas judiciais — Despesa isolada"
                     >
-                      Custas (3%)*
+                      Custas Judiciais*
                     </TableHead>
                     <TableHead className="text-right text-xs font-semibold text-slate-900 dark:text-white font-mono">
                       Rubrica Aplicável
@@ -429,6 +438,15 @@ export default function Index() {
                       sim.property_value,
                       sim.amount_paid,
                       sim.simulation_type,
+                      {
+                        expectedDeliveryDate: sim.expected_delivery_date,
+                        referenceDate: sim.reference_date,
+                        custasRate: sim.custas_rate,
+                        correctionEnabled: sim.correction_enabled,
+                        correctionIndex: sim.correction_index,
+                        correctionRate: sim.correction_rate,
+                        correctionStartDate: sim.correction_start_date,
+                      },
                     )
                     const statusConfig =
                       STATUS_LABELS[sim.status || 'em_negociacao'] || STATUS_LABELS.em_negociacao
@@ -487,9 +505,12 @@ export default function Index() {
                           </div>
                         </TableCell>
 
-                        {/* Custas 3% */}
+                        {/* Custas ajustáveis */}
                         <TableCell className="text-right text-xs font-mono font-medium py-3.5 text-slate-700 dark:text-slate-300">
-                          {formatCurrencyBRL(calc.judicialCosts)}
+                          <div>{formatCurrencyBRL(calc.judicialCosts)}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {formatPercentBRL(calc.custasRate, 1)}
+                          </div>
                         </TableCell>
 
                         {/* Rubrica Aplicável */}
@@ -499,7 +520,11 @@ export default function Index() {
                               <span className="font-bold text-blue-700 dark:text-blue-300">
                                 {formatCurrencyBRL(calc.onePercentAmountPaid)}
                               </span>
-                              <div className="text-[10px] text-muted-foreground">1% atraso</div>
+                              <div className="text-[10px] text-muted-foreground">
+                                {calc.isWithinGracePeriod
+                                  ? 'Carência ativa'
+                                  : `1% a.m. (${calc.delayMonths} m)`}
+                              </div>
                             </div>
                           ) : (
                             <div>
@@ -507,6 +532,11 @@ export default function Index() {
                                 {formatCurrencyBRL(calc.fineFiftyPercent)}
                               </span>
                               <div className="text-[10px] text-muted-foreground">Multa 50%</div>
+                            </div>
+                          )}
+                          {calc.correctionEnabled && (
+                            <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
+                              +{formatCurrencyBRL(calc.monetaryCorrectionAmount)} corr.
                             </div>
                           )}
                         </TableCell>

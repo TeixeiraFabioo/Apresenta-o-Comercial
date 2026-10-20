@@ -73,16 +73,23 @@ export async function createSimulation(data: SimulationFormData): Promise<Simula
   }
 
   try {
-    // Normaliza a data para formato ISO válido
-    let formattedDate = data.expected_delivery_date
-    if (formattedDate && !formattedDate.includes('T') && !formattedDate.includes('Z')) {
-      formattedDate = new Date(`${data.expected_delivery_date}T00:00:00.000Z`).toISOString()
+    // Normaliza datas para formato ISO válido
+    const normalizeDate = (d?: string) => {
+      if (!d) return undefined
+      if (d.includes('T') || d.includes('Z')) return d
+      return new Date(`${d}T00:00:00.000Z`).toISOString()
     }
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...data,
       user: currentUserId,
-      expected_delivery_date: formattedDate,
+      expected_delivery_date: normalizeDate(data.expected_delivery_date),
+      reference_date: normalizeDate(data.reference_date),
+      correction_start_date: normalizeDate(data.correction_start_date),
+      custas_rate: typeof data.custas_rate === 'number' ? data.custas_rate : 3,
+      correction_enabled: Boolean(data.correction_enabled),
+      correction_index: data.correction_index || 'inpc',
+      correction_rate: typeof data.correction_rate === 'number' ? data.correction_rate : 1,
       status: data.status || 'em_negociacao',
     }
 
@@ -102,15 +109,21 @@ export async function updateSimulation(
   data: Partial<SimulationFormData>,
 ): Promise<SimulationRecord> {
   try {
-    const payload = { ...data }
-    if (
-      payload.expected_delivery_date &&
-      !payload.expected_delivery_date.includes('T') &&
-      !payload.expected_delivery_date.includes('Z')
-    ) {
-      payload.expected_delivery_date = new Date(
-        `${payload.expected_delivery_date}T00:00:00.000Z`,
-      ).toISOString()
+    const normalizeDate = (d?: string) => {
+      if (!d) return undefined
+      if (d.includes('T') || d.includes('Z')) return d
+      return new Date(`${d}T00:00:00.000Z`).toISOString()
+    }
+
+    const payload: Record<string, unknown> = { ...data }
+    if (payload.expected_delivery_date) {
+      payload.expected_delivery_date = normalizeDate(payload.expected_delivery_date as string)
+    }
+    if (payload.reference_date) {
+      payload.reference_date = normalizeDate(payload.reference_date as string)
+    }
+    if (payload.correction_start_date) {
+      payload.correction_start_date = normalizeDate(payload.correction_start_date as string)
     }
 
     const record = await pb.collection(COLLECTION).update<SimulationRecord>(id, payload)
