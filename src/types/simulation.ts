@@ -34,6 +34,18 @@ export interface SimulationRecord {
   correction_index?: CorrectionIndex
   correction_rate?: number
   correction_start_date?: string // ISO date string
+  contract_file?: string
+  custom_fundamentacao?: string
+  created: string
+  updated: string
+}
+
+export interface StatusHistoryRecord {
+  id: string
+  simulation: string
+  user: string
+  previous_status?: SimulationStatus | string
+  new_status: SimulationStatus | string
   created: string
   updated: string
 }
@@ -57,6 +69,8 @@ export interface SimulationFormData {
   correction_index?: CorrectionIndex
   correction_rate?: number
   correction_start_date?: string
+  contract_file?: File | null | string
+  custom_fundamentacao?: string
 }
 
 export interface CalculationOptions {

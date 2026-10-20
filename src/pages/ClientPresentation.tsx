@@ -1,7 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { getSimulationById, updateSimulation } from '@/services/simulacoes'
-import { SimulationRecord, SimulationStatus } from '@/types/simulation'
+import {
+  getSimulationById,
+  updateSimulation,
+  getStatusHistory,
+  getContractFileUrl,
+} from '@/services/simulacoes'
+import { SimulationRecord, SimulationStatus, StatusHistoryRecord } from '@/types/simulation'
 import { isNotFoundError } from '@/lib/pocketbase/errors'
 import {
   calculateLegalCosts,
@@ -18,6 +23,15 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -44,8 +58,16 @@ import {
   HelpCircle,
   Receipt,
   Download,
+  Paperclip,
+  ExternalLink,
+  History,
+  Edit3,
+  RotateCcw,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+
+const DEFAULT_FUNDAMENTACAO =
+  'O presente demonstrativo tem amparo no Código de Defesa do Consumidor (Lei nº 8.078/1990, art. 51 e art. 53), na Lei nº 4.591/1964 com as alterações da Lei nº 13.786/2018 (Lei do Distrato Imobiliário) e nas Súmulas do Superior Tribunal de Justiça (Súmula 543/STJ). Na hipótese de rescisão contratual motivada por culpa exclusiva da construtora/incorporadora, impõe-se a restituição imediata e integral das quantias pagas, cumulada com a penalidade compensatória correspondente. Alternativamente, mantido o negócio jurídico, faz jus o adquirente à verba indenizatória pelo período de atraso após escoada a carência legal de 180 dias.'
 
 export default function ClientPresentation() {
   const { id } = useParams<{ id: string }>()
@@ -54,36 +76,47 @@ export default function ClientPresentation() {
   const { toast } = useToast()
 
   const [simulation, setSimulation] = useState<SimulationRecord | null>(null)
+  const [history, setHistory] = useState<StatusHistoryRecord[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!id) return
-    const fetchRecord = async () => {
-      try {
-        const record = await getSimulationById(id, user?.id)
-        setSimulation(record)
-      } catch (err) {
-        if (isNotFoundError(err)) {
-          toast({
-            variant: 'destructive',
-            title: 'Simulação não encontrada',
-            description: 'Esta simulação já foi excluída — atualize a lista.',
-          })
-        } else {
-          toast({
-            variant: 'destructive',
-            title: 'Erro ao carregar',
-            description: 'Não foi possível carregar a apresentação desta simulação.',
-          })
-        }
-        navigate('/')
-      } finally {
-        setLoading(false)
-      }
-    }
+  // Estado para edição da fundamentação jurídica (Item 7)
+  const [isEditingFundamentacao, setIsEditingFundamentacao] = useState(false)
+  const [fundamentacaoDraft, setFundamentacaoDraft] = useState('')
+  const [savingFundamentacao, setSavingFundamentacao] = useState(false)
 
-    fetchRecord()
-  }, [id, user?.id, navigate, toast])
+  const loadData = async () => {
+    if (!id) return
+    try {
+      const record = await getSimulationById(id, user?.id)
+      setSimulation(record)
+      setFundamentacaoDraft(record.custom_fundamentacao || DEFAULT_FUNDAMENTACAO)
+
+      // Carrega histórico de status (Item 4)
+      const historyList = await getStatusHistory(id, user?.id)
+      setHistory(historyList)
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        toast({
+          variant: 'destructive',
+          title: 'Simulação não encontrada',
+          description: 'Esta simulação já foi excluída — atualize a lista.',
+        })
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Erro ao carregar',
+          description: 'Não foi possível carregar a apresentação desta simulação.',
+        })
+      }
+      navigate('/')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadData()
+  }, [id, user?.id])
 
   const calc = useMemo(() => {
     if (!simulation) return null
@@ -117,6 +150,9 @@ export default function ClientPresentation() {
     try {
       const updated = await updateSimulation(id, { status: newStatus })
       setSimulation(updated)
+      // Recarrega histórico
+      const updatedHistory = await getStatusHistory(id, user?.id)
+      setHistory(updatedHistory)
       toast({
         title: 'Status atualizado',
         description: `Proposta marcada como "${STATUS_LABELS[newStatus]?.label || newStatus}".`,
@@ -135,6 +171,52 @@ export default function ClientPresentation() {
           title: 'Erro ao atualizar status',
         })
       }
+    }
+  }
+
+  const handleSaveFundamentacao = async () => {
+    if (!simulation || !id) return
+    setSavingFundamentacao(true)
+    try {
+      const customText = fundamentacaoDraft.trim()
+      const updated = await updateSimulation(id, {
+        custom_fundamentacao: customText === DEFAULT_FUNDAMENTACAO ? '' : customText,
+      })
+      setSimulation(updated)
+      setIsEditingFundamentacao(false)
+      toast({
+        title: 'Fundamentação salva com sucesso',
+        description: 'O texto personalizado será utilizado na impressão e visualização.',
+      })
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao salvar fundamentação',
+      })
+    } finally {
+      setSavingFundamentacao(false)
+    }
+  }
+
+  const handleResetFundamentacao = async () => {
+    if (!simulation || !id) return
+    setSavingFundamentacao(true)
+    try {
+      const updated = await updateSimulation(id, { custom_fundamentacao: '' })
+      setSimulation(updated)
+      setFundamentacaoDraft(DEFAULT_FUNDAMENTACAO)
+      setIsEditingFundamentacao(false)
+      toast({
+        title: 'Texto padrão restaurado',
+        description: 'A fundamentação jurídica voltou para o texto padrão do escritório.',
+      })
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao restaurar',
+      })
+    } finally {
+      setSavingFundamentacao(false)
     }
   }
 
@@ -167,6 +249,9 @@ export default function ClientPresentation() {
   const typeConfig =
     SIMULATION_TYPE_CONFIG[simulation.simulation_type || 'rescisao_contratual'] ||
     SIMULATION_TYPE_CONFIG.rescisao_contratual
+
+  const contractFileUrl = getContractFileUrl(simulation)
+  const currentFundamentacao = simulation.custom_fundamentacao?.trim() || DEFAULT_FUNDAMENTACAO
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto animate-fade-in pb-16 print:p-0 print:m-0 print:max-w-none">
@@ -210,6 +295,20 @@ export default function ClientPresentation() {
               Marcar Contrato Fechado
             </Button>
           )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setFundamentacaoDraft(currentFundamentacao)
+              setIsEditingFundamentacao(true)
+            }}
+            className="h-9 text-xs border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+            title="Editar fundamentação jurídica do caso antes de imprimir"
+          >
+            <Edit3 className="w-3.5 h-3.5 mr-1 text-amber-600" />
+            Editar Fundamentação
+          </Button>
 
           <Button
             variant="outline"
@@ -345,6 +444,35 @@ export default function ClientPresentation() {
                 <div className="text-xs text-slate-600 dark:text-slate-300 print:text-slate-700">
                   <span className="font-medium">Incorporadora/Ré: </span>
                   {simulation.developer_name}
+                </div>
+              )}
+
+              {/* Item 6: Anexo do Contrato Original na Apresentação */}
+              {simulation.contract_file && (
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Paperclip className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      Contrato Original:
+                    </span>
+                    <span className="text-slate-600 dark:text-slate-400 truncate">
+                      {simulation.contract_file}
+                    </span>
+                    {contractFileUrl && (
+                      <a
+                        href={contractFileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="print:hidden ml-auto inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 dark:text-blue-400 shrink-0"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Abrir Arquivo
+                      </a>
+                    )}
+                  </div>
+                  <div className="hidden print:block text-[10px] text-slate-500 italic mt-0.5">
+                    (Contrato original arquivado e anexado ao procedimento eletrônico)
+                  </div>
                 </div>
               )}
             </div>
@@ -666,13 +794,99 @@ export default function ClientPresentation() {
           {simulation.notes && (
             <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 print:border-slate-300">
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-1">
-                Fundamentos & Observações Específicas do Caso:
+                Observações Específicas do Caso:
               </span>
               <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
                 {simulation.notes}
               </p>
             </div>
           )}
+
+          {/* Item 7: Fundamentação Jurídica Customizável antes de imprimir */}
+          <div className="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 print:bg-transparent print:border-slate-300 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Scale className="w-3.5 h-3.5 text-amber-600" />
+                Fundamentação Jurídica do Parecer
+                {simulation.custom_fundamentacao && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] font-mono border-amber-400 text-amber-700 dark:text-amber-400 ml-1.5 print:hidden"
+                  >
+                    Texto Personalizado
+                  </Badge>
+                )}
+              </span>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFundamentacaoDraft(currentFundamentacao)
+                  setIsEditingFundamentacao(true)
+                }}
+                className="print:hidden h-7 text-xs text-amber-700 hover:text-amber-800 hover:bg-amber-100/50 dark:text-amber-400 px-2"
+              >
+                <Edit3 className="w-3 h-3 mr-1" />
+                Editar fundamentação
+              </Button>
+            </div>
+
+            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap font-sans text-justify print:text-slate-800">
+              {currentFundamentacao}
+            </p>
+          </div>
+
+          {/* Item 4: Linha do Tempo de Histórico de Status ("linha do tempo do caso") */}
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 print:bg-transparent print:border-slate-300 space-y-3">
+            <div className="flex items-center gap-2">
+              <History className="w-4 h-4 text-amber-600" />
+              <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                Linha do Tempo do Caso
+              </span>
+            </div>
+
+            {history.length > 0 ? (
+              <div className="relative pl-5 space-y-3 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-700 print:before:bg-slate-300">
+                {history.map((item, idx) => {
+                  const statusInfo = STATUS_LABELS[item.new_status] || {
+                    label: item.new_status,
+                    colorClasses: 'bg-slate-100 text-slate-800 border-slate-300',
+                  }
+                  const prevInfo = item.previous_status
+                    ? STATUS_LABELS[item.previous_status]?.label || item.previous_status
+                    : null
+
+                  return (
+                    <div key={item.id || idx} className="relative text-xs space-y-0.5">
+                      <div className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-amber-600 border-2 border-white dark:border-slate-900" />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-slate-900 dark:text-white">
+                          {statusInfo.label}
+                        </span>
+                        {prevInfo && (
+                          <span className="text-[10px] text-muted-foreground">
+                            (anterior: {prevInfo})
+                          </span>
+                        )}
+                        <span className="text-[11px] text-muted-foreground font-mono">
+                          • {formatDateBRL(item.created)}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground pl-2">
+                Status atual:{' '}
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {STATUS_LABELS[simulation.status]?.label || 'Em Negociação'}
+                </span>{' '}
+                (registro inicial criado em {formatDateBRL(simulation.created)}).
+              </div>
+            )}
+          </div>
 
           {/* Quadro de Assinaturas e Fechamento de Contrato */}
           <div className="pt-8 print:pt-12 space-y-12">
@@ -714,6 +928,71 @@ export default function ClientPresentation() {
           </div>
         </div>
       </div>
+
+      {/* Item 7: Modal de Edição da Fundamentação Jurídica */}
+      <Dialog open={isEditingFundamentacao} onOpenChange={setIsEditingFundamentacao}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Edit3 className="w-4 h-4 text-amber-600" />
+              Editar Fundamentação Jurídica do Caso
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Personalize o texto de fundamentação jurídica para este caso específico antes de
+              imprimir ou salvar o documento.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <Textarea
+              rows={7}
+              value={fundamentacaoDraft}
+              onChange={(e) => setFundamentacaoDraft(e.target.value)}
+              placeholder="Digite o texto de fundamentação legal aplicável ao caso..."
+              className="text-xs leading-relaxed resize-y font-sans"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              O texto salvo será exibido na página e sairá impresso no documento / PDF gerado.
+            </p>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleResetFundamentacao}
+              disabled={savingFundamentacao}
+              className="text-xs border-slate-300 dark:border-slate-700"
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1" />
+              Restaurar texto padrão
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditingFundamentacao(false)}
+                disabled={savingFundamentacao}
+                className="text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSaveFundamentacao}
+                disabled={savingFundamentacao || !fundamentacaoDraft.trim()}
+                className="bg-amber-600 hover:bg-amber-700 text-slate-950 font-bold text-xs"
+              >
+                {savingFundamentacao ? 'Salvando...' : 'Salvar Fundamentação'}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1,9 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { createSimulation, getSimulationById, updateSimulation } from '@/services/simulacoes'
+import {
+  createSimulation,
+  getSimulationById,
+  updateSimulation,
+  getContractFileUrl,
+} from '@/services/simulacoes'
 import {
   CorrectionIndex,
   SimulationFormData,
+  SimulationRecord,
   SimulationStatus,
   SimulationType,
 } from '@/types/simulation'
@@ -59,6 +65,11 @@ import {
   Scale,
   Landmark,
   TrendingUp,
+  Paperclip,
+  UploadCloud,
+  Trash2,
+  ExternalLink,
+  ArrowRightLeft,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -87,6 +98,12 @@ export default function SimulationForm() {
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState<SimulationStatus>('apresentado')
   const [simulationType, setSimulationType] = useState<SimulationType>('rescisao_contratual')
+
+  // Anexo de contrato original
+  const [contractFile, setContractFile] = useState<File | null>(null)
+  const [existingContractFileName, setExistingContractFileName] = useState<string | null>(null)
+  const [existingRecordForFile, setExistingRecordForFile] = useState<SimulationRecord | null>(null)
+  const [removeAttachment, setRemoveAttachment] = useState(false)
 
   // Novos campos: Data de referência, alíquota de custas, correção monetária
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
@@ -143,6 +160,10 @@ export default function SimulationForm() {
               ? 'indenizacao_atraso'
               : 'rescisao_contratual',
           )
+          if (record.contract_file) {
+            setExistingContractFileName(record.contract_file)
+            setExistingRecordForFile(record)
+          }
         } catch (err) {
           if (isNotFoundError(err)) {
             toast({
@@ -188,6 +209,51 @@ export default function SimulationForm() {
     propertyValueRaw,
     amountPaidRaw,
     simulationType,
+    expectedDeliveryDate,
+    referenceDate,
+    custasRate,
+    correctionEnabled,
+    correctionIndex,
+    correctionRate,
+    correctionStartDate,
+  ])
+
+  // Item 8: Comparativo lado a lado Rescisão vs Indenização usando a MESMA função para os mesmos dados
+  const comparisonRescisao = useMemo(() => {
+    return calculateLegalCosts(propertyValueRaw, amountPaidRaw, 'rescisao_contratual', {
+      expectedDeliveryDate,
+      referenceDate,
+      custasRate,
+      correctionEnabled,
+      correctionIndex,
+      correctionRate,
+      correctionStartDate: correctionStartDate || expectedDeliveryDate,
+    })
+  }, [
+    propertyValueRaw,
+    amountPaidRaw,
+    expectedDeliveryDate,
+    referenceDate,
+    custasRate,
+    correctionEnabled,
+    correctionIndex,
+    correctionRate,
+    correctionStartDate,
+  ])
+
+  const comparisonIndenizacao = useMemo(() => {
+    return calculateLegalCosts(propertyValueRaw, amountPaidRaw, 'indenizacao_atraso', {
+      expectedDeliveryDate,
+      referenceDate,
+      custasRate,
+      correctionEnabled,
+      correctionIndex,
+      correctionRate,
+      correctionStartDate: correctionStartDate || expectedDeliveryDate,
+    })
+  }, [
+    propertyValueRaw,
+    amountPaidRaw,
     expectedDeliveryDate,
     referenceDate,
     custasRate,
@@ -268,6 +334,11 @@ export default function SimulationForm() {
         correctionEnabled && (correctionStartDate || expectedDeliveryDate)
           ? correctionStartDate || expectedDeliveryDate
           : undefined,
+      contract_file: contractFile
+        ? contractFile
+        : removeAttachment
+          ? null
+          : existingContractFileName || undefined,
     }
 
     try {
@@ -954,6 +1025,109 @@ export default function SimulationForm() {
                     impressa do cliente.
                   </p>
                 </div>
+
+                {/* Item 6: Anexar Contrato Original (PDF, JPG, PNG) */}
+                <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                      <Paperclip className="w-3.5 h-3.5 text-amber-600" />
+                      Anexar Contrato Original (PDF, JPG, PNG - até 5MB)
+                    </Label>
+                    <span className="text-[11px] text-muted-foreground">Opcional</span>
+                  </div>
+
+                  {existingContractFileName &&
+                    !removeAttachment &&
+                    !contractFile &&
+                    existingRecordForFile && (
+                      <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2 truncate">
+                          <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span className="truncate font-medium text-slate-800 dark:text-slate-200">
+                            {existingContractFileName}
+                          </span>
+                          <a
+                            href={getContractFileUrl(existingRecordForFile) || '#'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 hover:text-blue-700 flex items-center gap-0.5 text-[11px] ml-2 shrink-0 font-medium"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Abrir anexo
+                          </a>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setRemoveAttachment(true)
+                            setExistingContractFileName(null)
+                          }}
+                          className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 shrink-0"
+                        >
+                          <Trash2 className="w-3 h-3 mr-1" />
+                          Remover anexo
+                        </Button>
+                      </div>
+                    )}
+
+                  {contractFile && (
+                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2 truncate">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="truncate font-medium text-slate-900 dark:text-white">
+                          Novo arquivo selecionado: {contractFile.name} (
+                          {(contractFile.size / 1024).toFixed(0)} KB)
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setContractFile(null)}
+                        className="h-7 text-xs text-rose-600 hover:text-rose-700 px-2 shrink-0"
+                      >
+                        Cancelar troca
+                      </Button>
+                    </div>
+                  )}
+
+                  {(!existingContractFileName || removeAttachment) && !contractFile && (
+                    <div className="relative border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-amber-500 rounded-xl p-4 text-center transition-colors">
+                      <input
+                        type="file"
+                        id="contract_file_input"
+                        accept="application/pdf,image/jpeg,image/png"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            if (file.size > 5 * 1024 * 1024) {
+                              toast({
+                                variant: 'destructive',
+                                title: 'Arquivo muito grande',
+                                description: 'O contrato deve ter até 5MB.',
+                              })
+                              return
+                            }
+                            setContractFile(file)
+                            setRemoveAttachment(false)
+                          }
+                        }}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <div className="flex flex-col items-center justify-center gap-1.5 text-xs pointer-events-none">
+                        <UploadCloud className="w-6 h-6 text-slate-400" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          Clique ou arraste o arquivo do contrato aqui
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          PDF, JPG ou PNG (Máximo 5MB)
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1242,6 +1416,167 @@ export default function SimulationForm() {
                 </span>
               </div>
             </CardFooter>
+          </Card>
+
+          {/* Item 8: Comparativo de Modalidades Lado a Lado (Rescisão vs. Indenização) */}
+          <Card className="border-slate-300 dark:border-slate-700 shadow-md bg-white dark:bg-slate-900 overflow-hidden">
+            <CardHeader className="bg-slate-100 dark:bg-slate-800/80 p-4 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold">
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                      Comparativo: Rescisão vs. Indenização
+                    </CardTitle>
+                    <CardDescription className="text-[10px] text-muted-foreground">
+                      Análise lado a lado com os mesmos valores de entrada
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge variant="outline" className="text-[9px] font-mono border-slate-400">
+                  Apenas Análise
+                </Badge>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-4 space-y-3">
+              <div className="text-[11px] text-muted-foreground bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                A modalidade escolhida no topo (
+                <strong className="text-slate-900 dark:text-white">
+                  {simulationType === 'rescisao_contratual'
+                    ? 'Rescisão Contratual'
+                    : 'Indenização por Atraso'}
+                </strong>
+                ) é a que vale para a simulação e apresentação. O quadro abaixo serve para orientar
+                a estratégia jurídica:
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                {/* Coluna 1: Rescisão Contratual */}
+                <div
+                  className={`p-3 rounded-xl border flex flex-col justify-between gap-3 ${
+                    simulationType === 'rescisao_contratual'
+                      ? 'bg-amber-50/60 dark:bg-amber-950/30 border-amber-400 ring-1 ring-amber-400/50'
+                      : 'bg-slate-50/60 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 opacity-90'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        Rescisão Contratual
+                      </span>
+                      {simulationType === 'rescisao_contratual' && (
+                        <Badge className="text-[9px] bg-amber-600 text-slate-950 font-bold px-1.5 py-0">
+                          Ativa
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground block">
+                      Desfazimento do contrato
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 pt-1 border-t border-slate-200 dark:border-slate-700 text-[11px]">
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">Multa 50%</span>
+                      <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-xs">
+                        {formatCurrencyBRL(comparisonRescisao.fineFiftyPercent)}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">1% ao mês</span>
+                      <span className="font-mono text-slate-400 text-[11px]">
+                        Não aplicável (R$ 0)
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">
+                        Custas judiciais ({formatPercentBRL(comparisonRescisao.custasRate, 1)})
+                      </span>
+                      <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">
+                        {formatCurrencyBRL(comparisonRescisao.judicialCosts)}
+                      </span>
+                    </div>
+
+                    <div className="pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                      <span className="text-muted-foreground block text-[10px] font-semibold uppercase">
+                        Total Estimado
+                      </span>
+                      <span className="font-mono font-black text-slate-900 dark:text-white text-sm">
+                        {formatCurrencyBRL(comparisonRescisao.estimatedTotal)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Coluna 2: Indenização por Atraso */}
+                <div
+                  className={`p-3 rounded-xl border flex flex-col justify-between gap-3 ${
+                    simulationType === 'indenizacao_atraso'
+                      ? 'bg-blue-50/60 dark:bg-blue-950/30 border-blue-400 ring-1 ring-blue-400/50'
+                      : 'bg-slate-50/60 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 opacity-90'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        Indenização por Atraso
+                      </span>
+                      {simulationType === 'indenizacao_atraso' && (
+                        <Badge className="text-[9px] bg-blue-600 text-white font-bold px-1.5 py-0">
+                          Ativa
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground block">
+                      Manutenção do contrato
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 pt-1 border-t border-slate-200 dark:border-slate-700 text-[11px]">
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">Multa 50%</span>
+                      <span className="font-mono text-slate-400 text-[11px]">
+                        Não devida (R$ 0)
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">
+                        1% ao mês ({comparisonIndenizacao.delayMonths} m)
+                      </span>
+                      <span className="font-mono font-bold text-blue-700 dark:text-blue-300 text-xs">
+                        {comparisonIndenizacao.isWithinGracePeriod
+                          ? 'R$ 0,00 (Carência)'
+                          : formatCurrencyBRL(comparisonIndenizacao.onePercentAmountPaid)}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">
+                        Custas judiciais ({formatPercentBRL(comparisonIndenizacao.custasRate, 1)})
+                      </span>
+                      <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">
+                        {formatCurrencyBRL(comparisonIndenizacao.judicialCosts)}
+                      </span>
+                    </div>
+
+                    <div className="pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                      <span className="text-muted-foreground block text-[10px] font-semibold uppercase">
+                        Total Estimado
+                      </span>
+                      <span className="font-mono font-black text-slate-900 dark:text-white text-sm">
+                        {formatCurrencyBRL(comparisonIndenizacao.estimatedTotal)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
           </Card>
         </div>
       </form>

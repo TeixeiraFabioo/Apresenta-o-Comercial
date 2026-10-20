@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-20T21:01:55.493Z",
+  "generatedAt": "2026-10-20T21:08:58.371Z",
   "collections": [
     {
       "name": "users",
@@ -192,11 +192,80 @@
           "type": "date",
           "required": false,
           "system": false
+        },
+        {
+          "name": "contract_file",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "custom_fundamentacao",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
         "CREATE INDEX idx_simulacoes_user_created ON simulacoes (user, created DESC)",
         "CREATE INDEX idx_simulacoes_client_name ON simulacoes (client_name)"
+      ]
+    },
+    {
+      "name": "status_history",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != \"\" && user = @request.auth.id",
+        "view": "@request.auth.id != \"\" && user = @request.auth.id",
+        "create": "@request.auth.id != \"\"",
+        "update": "@request.auth.id != \"\" && user = @request.auth.id",
+        "delete": "@request.auth.id != \"\" && user = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "simulation",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "simulacoes"
+        },
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "previous_status",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "new_status",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_status_history_sim_created ON status_history (simulation, created DESC)",
+        "CREATE INDEX idx_status_history_user ON status_history (user)"
       ]
     }
   ]

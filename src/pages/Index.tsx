@@ -1,6 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSimulations, deleteSimulation, getSimulationById } from '@/services/simulacoes'
+import {
+  getSimulations,
+  deleteSimulation,
+  getSimulationById,
+  archiveSimulation,
+  duplicateSimulation,
+  getContractFileUrl,
+} from '@/services/simulacoes'
 import { SimulationRecord } from '@/types/simulation'
 import { isNotFoundError } from '@/lib/pocketbase/errors'
 import {
@@ -11,11 +18,19 @@ import {
   STATUS_LABELS,
   SIMULATION_TYPE_CONFIG,
 } from '@/lib/calculations'
+import { exportSimulationsToExcel } from '@/lib/exportExcel'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -61,6 +76,10 @@ import {
   Scale,
   RefreshCw,
   FileSpreadsheet,
+  Archive,
+  Copy,
+  Download,
+  Paperclip,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -71,6 +90,7 @@ export default function Index() {
 
   const [simulations, setSimulations] = useState<SimulationRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('todos')
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -192,13 +212,89 @@ export default function Index() {
     }
   }
 
+  const handleArchive = async (simId: string) => {
+    setActionLoading(true)
+    try {
+      const updated = await archiveSimulation(simId)
+      setSimulations((prev) =>
+        prev.map((s) => (s.id === simId ? { ...s, status: 'arquivado' } : s)),
+      )
+      toast({
+        title: 'Simulação arquivada',
+        description: 'A simulação foi movida para o status "Arquivado".',
+      })
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        toast({
+          variant: 'destructive',
+          title: 'Simulação não encontrada',
+          description: 'Esta simulação já foi excluída — atualize a lista.',
+        })
+        setSimulations((prev) => prev.filter((s) => s.id !== simId))
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Erro ao arquivar',
+          description: 'Não foi possível arquivar a simulação.',
+        })
+      }
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleDuplicate = async (simId: string) => {
+    setActionLoading(true)
+    try {
+      const copy = await duplicateSimulation(simId)
+      toast({
+        title: 'Simulação duplicada!',
+        description: 'Abrindo a nova simulação em modo de edição...',
+      })
+      navigate(`/editar-simulacao/${copy.id}`)
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao duplicar',
+        description: 'Não foi possível duplicar a simulação.',
+      })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleExportExcel = () => {
+    if (filteredSimulations.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Nenhuma simulação para exportar',
+        description: 'Não há dados que correspondam aos filtros atuais.',
+      })
+      return
+    }
+    try {
+      exportSimulationsToExcel(filteredSimulations)
+      toast({
+        title: 'Planilha Excel gerada com sucesso!',
+        description: `${filteredSimulations.length} simulação(ões) exportada(s) com fórmulas vivas.`,
+      })
+    } catch (err) {
+      console.error(err)
+      toast({
+        variant: 'destructive',
+        title: 'Erro na exportação',
+        description: 'Não foi possível gerar a planilha Excel.',
+      })
+    }
+  }
+
   const handleDelete = async () => {
     if (!deletingId) return
     try {
       await deleteSimulation(deletingId)
       toast({
         title: 'Simulação excluída',
-        description: 'O registro foi removido com sucesso.',
+        description: 'O registro foi removido definitivamente.',
       })
       setSimulations((prev) => prev.filter((s) => s.id !== deletingId))
     } catch (err) {
@@ -246,6 +342,16 @@ export default function Index() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={handleExportExcel}
+              disabled={loading || filteredSimulations.length === 0}
+              className="bg-slate-900/60 hover:bg-slate-800 text-white border-amber-500/40 hover:border-amber-400 font-semibold h-12 px-5 text-sm shadow-md"
+            >
+              <Download className="w-4 h-4 mr-2 text-amber-400" />
+              Exportar Excel (.xlsx)
+            </Button>
             <Button
               onClick={() => navigate('/nova-simulacao')}
               size="lg"
@@ -351,7 +457,7 @@ export default function Index() {
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
               {/* Barra de Pesquisa */}
-              <div className="relative w-full sm:w-64">
+              <div className="relative w-full sm:w-60">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar cliente, imóvel..."
@@ -360,6 +466,36 @@ export default function Index() {
                   className="pl-9 h-9 text-xs"
                 />
               </div>
+
+              {/* Filtro Visível de Status (Item 1) */}
+              <div className="w-full sm:w-52">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-9 text-xs bg-white dark:bg-slate-900">
+                    <SelectValue placeholder="Filtrar por Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os Status</SelectItem>
+                    <SelectItem value="em_negociacao">Em Negociação</SelectItem>
+                    <SelectItem value="apresentado">Apresentado ao Cliente</SelectItem>
+                    <SelectItem value="contrato_fechado">Contrato Fechado</SelectItem>
+                    <SelectItem value="em_andamento">Ação Distribuída</SelectItem>
+                    <SelectItem value="arquivado">Arquivado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Botão de Exportar Excel */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportExcel}
+                disabled={loading || filteredSimulations.length === 0}
+                className="h-9 px-3 text-xs border-emerald-600/40 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                title="Exportar dados filtrados para Excel com fórmulas vivas"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+                Excel ({filteredSimulations.length})
+              </Button>
 
               {/* Botão de Atualizar */}
               <Button
@@ -464,12 +600,28 @@ export default function Index() {
                         <TableCell className="font-medium text-xs py-3.5">
                           <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
                             <span>{sim.client_name}</span>
+                            {sim.contract_file && (
+                              <a
+                                href={getContractFileUrl(sim) || '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="Contrato original anexado (clique para abrir)"
+                                className="inline-flex items-center text-amber-600 hover:text-amber-700 dark:text-amber-400 p-0.5 rounded hover:bg-amber-100/50"
+                              >
+                                <Paperclip className="w-3.5 h-3.5" />
+                              </a>
+                            )}
                           </div>
                           <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
                             {sim.contract_number ? (
                               <span>Contr: {sim.contract_number}</span>
                             ) : (
                               <span>Doc: {sim.client_document || 'Não informado'}</span>
+                            )}
+                            {sim.contract_file && (
+                              <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
+                                • Contrato anexo
+                              </span>
                             )}
                           </div>
                         </TableCell>
@@ -599,6 +751,24 @@ export default function Index() {
                                   <Edit className="w-4 h-4 mr-2 text-amber-600" />
                                   Editar Dados
                                 </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleDuplicate(sim.id)}
+                                  disabled={actionLoading}
+                                  className="cursor-pointer text-xs text-slate-700 dark:text-slate-300"
+                                >
+                                  <Copy className="w-4 h-4 mr-2 text-indigo-600" />
+                                  Duplicar Simulação
+                                </DropdownMenuItem>
+                                {sim.status !== 'arquivado' && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleArchive(sim.id)}
+                                    disabled={actionLoading}
+                                    className="cursor-pointer text-xs text-slate-700 dark:text-slate-300"
+                                  >
+                                    <Archive className="w-4 h-4 mr-2 text-slate-500" />
+                                    Arquivar
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   onClick={() => setDeletingId(sim.id)}
@@ -629,8 +799,7 @@ export default function Index() {
               Excluir Simulação de Custas?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-slate-600 dark:text-slate-400">
-              Esta ação removerá permanentemente os cálculos e dados gravados para este cliente.
-              Esta operação não pode ser desfeita.
+              A exclusão é permanente e não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
