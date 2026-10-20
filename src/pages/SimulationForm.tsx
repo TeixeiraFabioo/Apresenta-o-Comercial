@@ -7,9 +7,9 @@ import {
   formatCurrencyBRL,
   formatPercentBRL,
   getDeliveryDelayStatus,
-  sanitizeNumber,
   SIMULATION_TYPE_CONFIG,
 } from '@/lib/calculations'
+import { CurrencyInput } from '@/components/CurrencyInput'
 import { isNotFoundError } from '@/lib/pocketbase/errors'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -67,8 +67,8 @@ export default function SimulationForm() {
   const [clientDocument, setClientDocument] = useState('')
   const [propertyName, setPropertyName] = useState('')
   const [unitDescription, setUnitDescription] = useState('')
-  const [propertyValueRaw, setPropertyValueRaw] = useState<string>('480000')
-  const [amountPaidRaw, setAmountPaidRaw] = useState<string>('240000')
+  const [propertyValueRaw, setPropertyValueRaw] = useState<number>(480000)
+  const [amountPaidRaw, setAmountPaidRaw] = useState<number>(240000)
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<string>(
     new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
   )
@@ -88,8 +88,8 @@ export default function SimulationForm() {
           setClientDocument(record.client_document || '')
           setPropertyName(record.property_name || '')
           setUnitDescription(record.unit_description || '')
-          setPropertyValueRaw(String(record.property_value || ''))
-          setAmountPaidRaw(String(record.amount_paid || ''))
+          setPropertyValueRaw(typeof record.property_value === 'number' ? record.property_value : 0)
+          setAmountPaidRaw(typeof record.amount_paid === 'number' ? record.amount_paid : 0)
 
           if (record.expected_delivery_date) {
             const dateOnly = record.expected_delivery_date.split('T')[0].split(' ')[0]
@@ -158,8 +158,8 @@ export default function SimulationForm() {
       return
     }
 
-    const propVal = sanitizeNumber(propertyValueRaw)
-    const paidVal = sanitizeNumber(amountPaidRaw)
+    const propVal = propertyValueRaw
+    const paidVal = amountPaidRaw
 
     if (propVal <= 0) {
       toast({
@@ -239,8 +239,8 @@ export default function SimulationForm() {
     setClientDocument('214.558.901-44')
     setPropertyName('Residencial Grand Boulevard')
     setUnitDescription('Apartamento 184 - Torre A')
-    setPropertyValueRaw('480000')
-    setAmountPaidRaw('240000')
+    setPropertyValueRaw(480000)
+    setAmountPaidRaw(240000)
     setContractNumber('CTR-8891/2022')
     setDeveloperName('Cyrela / Construtora Metropolitana SPE')
     setNotes(
@@ -439,25 +439,17 @@ export default function SimulationForm() {
                     Valor total de aquisição
                   </span>
                 </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-sm font-semibold text-slate-400">
-                    R$
-                  </span>
-                  <Input
-                    id="property_value"
-                    type="number"
-                    step="any"
-                    min="0"
-                    required
-                    placeholder="Ex: 480000.00"
-                    value={propertyValueRaw}
-                    onChange={(e) => setPropertyValueRaw(e.target.value)}
-                    className="pl-10 text-base font-mono font-semibold h-11 border-slate-300 dark:border-slate-700"
-                  />
-                </div>
+                <CurrencyInput
+                  id="property_value"
+                  required
+                  placeholder="R$ 0,00"
+                  value={propertyValueRaw}
+                  onValueChange={(val) => setPropertyValueRaw(val)}
+                  className="text-base font-mono font-semibold h-11 border-slate-300 dark:border-slate-700"
+                />
                 <p className="text-[11px] text-muted-foreground">
                   Valor total da compra constante no Instrumento Particular de Promessa de Compra e
-                  Venda.
+                  Venda. Digite apenas números ou cole com vírgula (ex.: R$ 480.000,00).
                 </p>
               </div>
 
@@ -476,22 +468,14 @@ export default function SimulationForm() {
                       : 'Base para 1% de Atraso e Custas'}
                   </span>
                 </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-sm font-semibold text-emerald-600">
-                    R$
-                  </span>
-                  <Input
-                    id="amount_paid"
-                    type="number"
-                    step="any"
-                    min="0"
-                    required
-                    placeholder="Ex: 240000.00"
-                    value={amountPaidRaw}
-                    onChange={(e) => setAmountPaidRaw(e.target.value)}
-                    className="pl-10 text-base font-mono font-semibold h-11 border-emerald-300 dark:border-emerald-800 focus-visible:ring-emerald-500"
-                  />
-                </div>
+                <CurrencyInput
+                  id="amount_paid"
+                  required
+                  placeholder="R$ 0,00"
+                  value={amountPaidRaw}
+                  onValueChange={(val) => setAmountPaidRaw(val)}
+                  className="text-base font-mono font-semibold h-11 border-emerald-300 dark:border-emerald-800 focus-visible:ring-emerald-500"
+                />
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-muted-foreground">
                     Soma de entrada, parcelas mensais, balões e chaves quitadas.
@@ -500,6 +484,27 @@ export default function SimulationForm() {
                     {formatPercentBRL(calcResults.paidPercentage)} do imóvel quitado
                   </span>
                 </div>
+
+                {/* Aviso de sanidade se o valor pago for maior que o valor do imóvel */}
+                {amountPaidRaw > 0 && propertyValueRaw > 0 && amountPaidRaw > propertyValueRaw && (
+                  <div
+                    role="alert"
+                    className="mt-2 p-3 rounded-lg border border-amber-300/70 bg-amber-50/90 dark:bg-amber-950/40 dark:border-amber-700/60 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5 animate-fade-in"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="font-semibold text-amber-950 dark:text-amber-100">
+                        Atenção: o valor pago está maior que o valor do imóvel
+                      </p>
+                      <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                        Confira se os valores foram digitados corretamente (
+                        {formatCurrencyBRL(amountPaidRaw)} pago vs.{' '}
+                        {formatCurrencyBRL(propertyValueRaw)} do imóvel). Normalmente isso indica
+                        uma inversão ou erro de digitação.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Data Prevista de Entrega */}
