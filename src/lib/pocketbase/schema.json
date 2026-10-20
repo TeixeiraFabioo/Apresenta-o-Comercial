@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-20T16:40:43.159Z",
+  "generatedAt": "2026-10-20T21:00:48.428Z",
   "collections": [
     {
       "name": "users",
@@ -29,14 +29,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -140,21 +145,29 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "simulation_type",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["rescisao_contratual", "indenizacao_atraso"]
+          "selectValues": [
+            "rescisao_contratual",
+            "indenizacao_atraso"
+          ]
         }
       ],
       "indexes": [
