@@ -20,20 +20,14 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof ClientResponseError && error.status === 404
+}
+
 export function getErrorMessage(error: unknown): string {
   if (!(error instanceof ClientResponseError)) {
     return error instanceof Error ? error.message : 'An unexpected error occurred.'
   }
   const msgs = Object.values(extractFieldErrors(error))
   return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
-}
-
-export function isNotFoundError(error: unknown): boolean {
-  if (error instanceof ClientResponseError) {
-    return error.status === 404
-  }
-  if (error && typeof error === 'object' && 'status' in error) {
-    return (error as { status: unknown }).status === 404
-  }
-  return false
 }

@@ -133,11 +133,14 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
     },
     ref,
   ) => {
+    const inputRef = useRef<HTMLInputElement | null>(null)
     // Estado do texto exibido no input
     const [displayValue, setDisplayValue] = useState<string>(() => {
       return value > 0 ? formatBRLValue(value) : ''
     })
     const isFocusedRef = useRef(false)
+    // Guarda a posição desejada para reposicionar o cursor após a re-renderização
+    const pendingCursorRef = useRef<number | null>(null)
 
     // Sincroniza se o valor numérico externo mudar enquanto o input não estiver com foco
     useEffect(() => {
@@ -145,6 +148,21 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
         setDisplayValue(value > 0 ? formatBRLValue(value) : '')
       }
     }, [value])
+
+    // Reposiciona o cursor de forma determinística após o novo valor estar refletido no DOM
+    useEffect(() => {
+      if (pendingCursorRef.current !== null && inputRef.current) {
+        const targetPos = pendingCursorRef.current
+        pendingCursorRef.current = null
+        inputRef.current.setSelectionRange(targetPos, targetPos)
+        // Reforço via requestAnimationFrame para garantir que renderizações concorrentes ou de terceiros não resetem
+        requestAnimationFrame(() => {
+          if (inputRef.current && document.activeElement === inputRef.current) {
+            inputRef.current.setSelectionRange(targetPos, targetPos)
+          }
+        })
+      }
+    }, [displayValue])
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
       isFocusedRef.current = true
@@ -157,6 +175,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
       isFocusedRef.current = false
+      pendingCursorRef.current = null
       // No blur, padroniza com 2 casas decimais se houver valor
       if (value > 0) {
         setDisplayValue(formatBRLValue(value))
@@ -168,10 +187,12 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value
+      const originalCursor = e.target.selectionStart ?? raw.length
 
       // Se apagou tudo ou restou apenas espaços
       const cleanRaw = raw.trim().replace(/^R\$\s?/, '')
       if (!cleanRaw) {
+        pendingCursorRef.current = 0
         setDisplayValue('')
         onValueChange(0)
         return
@@ -181,6 +202,41 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       const numericVal = parseBRLInput(raw)
       const liveText = formatLiveDisplay(raw, numericVal)
 
+      // Cálculo do reposicionamento determinístico do cursor:
+      // Se o cursor estava no final do texto original digitado, posiciona no final do texto reformatado
+      if (originalCursor >= raw.length) {
+        pendingCursorRef.current = liveText.length
+      } else {
+        // Conta quantos dígitos existiam antes da posição original do cursor
+        const textBeforeCursor = raw.slice(0, originalCursor)
+        const digitsBeforeCursor = (textBeforeCursor.match(/\d/g) || []).length
+
+        // Se o cursor estava logo após uma vírgula (ex.: acabou de digitar vírgula ou estava na vírgula)
+        const isRightAfterComma = originalCursor > 0 && raw[originalCursor - 1] === ','
+        const liveCommaIndex = liveText.indexOf(',')
+
+        if (isRightAfterComma && liveCommaIndex !== -1) {
+          pendingCursorRef.current = liveCommaIndex + 1
+        } else if (digitsBeforeCursor === 0) {
+          // Se não havia dígitos antes do cursor, fica no início
+          pendingCursorRef.current = 0
+        } else {
+          // Encontra a posição imediatamente após o dígito correspondente no texto reformatado
+          let count = 0
+          let newCursor = liveText.length
+          for (let i = 0; i < liveText.length; i++) {
+            if (/\d/.test(liveText[i])) {
+              count++
+              if (count === digitsBeforeCursor) {
+                newCursor = i + 1
+                break
+              }
+            }
+          }
+          pendingCursorRef.current = newCursor
+        }
+      }
+
       setDisplayValue(liveText)
       onValueChange(numericVal)
     }
@@ -189,6 +245,16 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       // Permite navegação, backspace, delete, tab, enter, setas, etc.
       // Se pressionar vírgula ou ponto, permite
       props.onKeyDown?.(e)
+    }
+
+    // Combina a ref encaminhada com a ref interna
+    const handleRef = (node: HTMLInputElement | null) => {
+      inputRef.current = node
+      if (typeof ref === 'function') {
+        ref(node)
+      } else if (ref) {
+        ;(ref as React.MutableRefObject<HTMLInputElement | null>).current = node
+      }
     }
 
     return (
@@ -201,7 +267,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
         </span>
         <Input
           {...props}
-          ref={ref}
+          ref={handleRef}
           id={id}
           type="text"
           inputMode="numeric"
